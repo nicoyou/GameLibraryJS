@@ -1,0 +1,14 @@
+{
+	"githubPages": false,		// .nojekyll を出力しない
+	"hideGenerator": true,		// ページの最後に TypeDoc リンクを印刷しない
+	"navigationLinks": {
+        "NicoyouGame": "http://nicoyou.jp/home",
+    },
+	"searchInComments": true,	// コメントで検索
+	"visibilityFilters": {		// 表示設定
+        "protected": true,
+        "private": false,
+        "inherited": true,
+        "external": true,
+    },
+}
