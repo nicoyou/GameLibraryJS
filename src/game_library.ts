@@ -1094,6 +1094,12 @@ class TweenAngle extends Tween<angle_t>{
 
 /** 座標を保存するための拡張 Tween クラス */
 class TweenVector2 extends Tween<Vector2, float>{
+	/** @inheritdoc */
+	constructor(value: Vector2, speed: float) {
+		super(value, speed);
+		this.dest = value.copy();
+	}
+
 	/** 現在の値を目標の値に近づける */
 	approach(): void {
 		this.value = this.value.approach(this.dest, this.speed);
@@ -1102,6 +1108,12 @@ class TweenVector2 extends Tween<Vector2, float>{
 
 /** 色を保存するための拡張 Tween クラス */
 class TweenColor extends Tween<Color, float>{
+	/** @inheritdoc */
+	constructor(value: Color, speed: float) {
+		super(value, speed);
+		this.dest = value.copy();
+	}
+
 	/** 現在の値を目標の値に近づける */
 	approach(): void {
 		this.value = this.value.approach(this.dest, this.speed);
@@ -1112,29 +1124,31 @@ class TweenColor extends Tween<Color, float>{
 class ClickButton {
 	/** ボタンの位置 */
 	protected rect: Rectangle;
+	/** ボタン選択時に呼ばれるコールバックイベント */
+	protected readonly enter_callback: (() => void) | null;
 	/** ボタンのステータス */
 	public status: BUTTON_STATUS;
 
 	/**
 	 * ボタンの位置を指定して初期化する
 	 * @param rect ボタンの位置
+	 * @param enter_callback クリック時のコールバックイベント
 	 */
-	constructor(rect: Rectangle) {
+	constructor(rect: Rectangle, enter_callback: (() => void) | null = null) {
 		this.rect = rect.copy();
+		this.enter_callback = enter_callback;
 		this.status = BUTTON_STATUS.normal;
 	}
 	/** オーバーライドしてボタンの状態に対する処理を実装するためのメソッド */
 	update(): void {
-		if (this.is_hover_start) print_log("hover start");
-		if (this.is_click_start) print_log("click start");
-		if (this.is_enter) print_log("enter");
+		if (this.is_enter && this.enter_callback) this.enter_callback();
 	}
 	/** ボタンのステータスを更新する */
 	update_status(): void {
 		if (Collision.check(this.rect, new Dot(get_mouse_pos().x, get_mouse_pos().y))) {
 			if (get_mouse_click() == 1) this.status = BUTTON_STATUS.click_start;
 			else if (get_mouse_click()) this.status = BUTTON_STATUS.click;
-			else if (get_mouse_no_click() == 1) this.status = BUTTON_STATUS.enter;
+			else if (get_mouse_release() == 1) this.status = BUTTON_STATUS.enter;
 			else if (this.status == BUTTON_STATUS.normal) this.status = BUTTON_STATUS.hover_start;
 			else this.status = BUTTON_STATUS.hover;
 		}
@@ -1153,9 +1167,8 @@ class ClickButton {
 	draw(): void {
 		let color = COLOR.white;
 		if (this.is_hover) color = COLOR.p_yellow;
-		if (this.is_click) color = COLOR.p_green;
-		const ctx = game_lib.canvas?.getContext("2d");
-		ctx?.draw_box(this.rect.ul_pos.x, this.rect.ul_pos.y, this.rect.br_pos.x, this.rect.br_pos.y, color);
+		if (this.is_click) color = COLOR.gray;
+		ctx.draw_box(this.rect.ul_pos.x, this.rect.ul_pos.y, this.rect.br_pos.x, this.rect.br_pos.y, color);
 	}
 	/** マウスがホバー状態かどうか */
 	get is_hover(): boolean {
@@ -1184,6 +1197,64 @@ class ClickButton {
 	/** ボタンがアクティブな状態 ( ホバーかクリックされている状態 ) ではないかどうか */
 	get is_inactive(): boolean {
 		return (this.is_active == false);
+	}
+}
+
+/** ClickButton クラスの draw メソッドにアニメーションを付けた、そのまま使えるデザインボタン */
+class ClickButtonAnimation extends ClickButton {
+	/** ボタンの色 */
+	protected readonly color: Color;
+	/** ボタンを塗りつぶす色 */
+	protected readonly fill_color_tween: TweenColor;
+	/** アニメーション用カウンタ */
+	protected count: int;
+
+	/**
+	 * ボタンの位置を指定して初期化する
+	 * @param rect ボタンの位置
+	 * @param enter_callback クリック時のコールバックイベント
+	 * @param start_anim_count アニメーションの初期カウント
+	 */
+	constructor(rect: Rectangle, enter_callback: (() => void) | null = null, color: Color = COLOR.white, start_anim_count: int = 0) {
+		super(rect, enter_callback);
+		this.color = color.copy();
+		this.fill_color_tween = new TweenColor(color.with_a(0.1), 15);
+		this.count = start_anim_count;
+	}
+	/** @inheritdoc */
+	update(): void {
+		super.update();
+		if (this.is_hover) this.fill_color_tween.dest = this.color.copy();
+		else if (this.is_inactive) this.fill_color_tween.dest = this.color.with_a(0.1);
+		else if (this.is_click) {
+			this.fill_color_tween.dest = this.color.merge(COLOR.black);
+		}
+		this.fill_color_tween.approach();
+		this.count++;
+	}
+	/** @inheritdoc */
+	draw(): void {
+		let fill_color = this.fill_color_tween.value.copy();
+		let color = this.color.copy();
+		if (this.animation_mag < 1) {			// アニメーション中はパラメーターをアニメーションする
+			fill_color.a = fill_color.a * this.animation_mag;
+			color.a = color.a * this.animation_mag;
+		}
+		ctx.draw_box(this.rect.ul_pos.x, this.rect.ul_pos.y + this.adnimation_add_y, this.rect.br_pos.x, this.rect.br_pos.y + this.adnimation_add_y, fill_color);
+		ctx.draw_box(this.rect.ul_pos.x, this.rect.ul_pos.y + this.adnimation_add_y, this.rect.br_pos.x, this.rect.br_pos.y + this.adnimation_add_y, color, false, 3);
+	}
+	/** 表示アニメーションの移動量を取得する ( 0 ~ 1 に徐々に変化し、不透明度としてはそのまま使用できる ) */
+	get animation_mag(): float {
+		return get_cubic_bezier_point(normalize_zero_to_one(this.count * 0.03));
+	}
+	/** ボタンを描画するときの、y の加算値を取得する */
+	get adnimation_add_y(): float {
+		if (this.animation_mag < 1) {			// アニメーション中はパラメーターをアニメーションする
+			const START_ANIM_ADD_Y = 25;
+			return START_ANIM_ADD_Y - this.animation_mag * START_ANIM_ADD_Y;
+		}
+		if (this.is_click) return 5;			// クリック中は少し下げる
+		return 0;
 	}
 }
 
@@ -1310,8 +1381,7 @@ class ClickButtonSelectGroup {
 	 */
 	push_select_button_vertical(button: ClickButton, active: boolean = false): void {
 		if (this.select_button_list[0].length != 0) this.new_line();
-		this.push_select_button(button);
-		if (active) this.active_index.set(this.select_button_list[this.select_button_list.length - 1].length - 1, this.select_button_list.length - 1);		// アクティブなボタンを変更する
+		this.push_select_button(button, active);
 	}
 	/** ボタンの挿入位置を改行する */
 	new_line(): void {
@@ -1637,6 +1707,34 @@ class Collision {
 	}
 }
 
+/** ボタンの押下状態を格納する ( 内部処理用 ) */
+class ButtonStatus {
+	/** ボタンが押下されているかどうか */
+	public is_button_pressed: boolean;
+	/** ボタンが押下されている長さ */
+	public button_press_duration: int;
+	/** ボタンが押下されていない長さ */
+	public button_release_duration: int;
+
+	/** それぞれの値を初期化する */
+	constructor() {
+		this.is_button_pressed = false;
+		this.button_press_duration = 0;
+		this.button_release_duration = 0;
+	}
+	/** ボタンの押下状態からカウンターの値を更新する */
+	update(): void {
+		if (this.is_button_pressed) {
+			this.button_press_duration++;
+			this.button_release_duration = 0;
+		}
+		else {
+			this.button_press_duration = 0;
+			this.button_release_duration++;
+		}
+	}
+}
+
 
 /** 一般的な色のカラーオブジェクト */
 const COLOR = {
@@ -1721,12 +1819,10 @@ namespace game_lib {
 
 	/** マウスの座標 */
 	export let mouse_pos: Vector2 = new Vector2();
-	/** マウスがクリックされているかどうか */
-	export let mouse_click: boolean = false;
-	/** マウスがクリックされている長さ */
-	export let mouse_click_count: int = 0;
-	/** マウスがクリックされていない長さ */
-	export let mouse_no_click_count: int = 0;
+	/** マウスの左ボタンが押されているかどうかの状態 */
+	export let mouse_left: ButtonStatus = new ButtonStatus();
+	/** マウスの右ボタンが押されているかどうかの状態 */
+	export let mouse_right: ButtonStatus = new ButtonStatus();
 	/** マウスホイールの移動量 */
 	export let mouse_wheel: int = 0;
 
@@ -1762,6 +1858,9 @@ namespace game_lib {
  */
 function game_lib_init(canvas: HTMLCanvasElement | null = null): void {
 	game_lib.canvas = canvas;
+	if (game_lib.canvas !== null) {			// キャンバスに対する右クリックのメニュー表示を無効化する
+		game_lib.canvas.oncontextmenu = () => { return false; };
+	}
 	game_lib.key_input.fill(false);
 	game_lib.key_input_count.fill(0);
 }
@@ -1901,22 +2000,18 @@ document.addEventListener("mousemove", e => {
 });
 /** マウスボタン押下時のコールバックイベント */
 document.addEventListener("mousedown", e => {
-	game_lib.mouse_click = true;
+	if (e.button == 0) game_lib.mouse_left.is_button_pressed = true;
+	else if (e.button == 2) game_lib.mouse_right.is_button_pressed = true;
 });
 /** マウスボタン開放時のコールバックイベント */
 document.addEventListener("mouseup", e => {
-	game_lib.mouse_click = false;
+	if (e.button == 0) game_lib.mouse_left.is_button_pressed = false;
+	else if (e.button == 2) game_lib.mouse_right.is_button_pressed = false;
 });
 /** マウス入力を更新する */
 function mouse_input_update(): void {
-	if (game_lib.mouse_click) {
-		game_lib.mouse_click_count++;
-		game_lib.mouse_no_click_count = 0;
-	}
-	else {
-		game_lib.mouse_click_count = 0;
-		game_lib.mouse_no_click_count++;
-	}
+	game_lib.mouse_left.update();
+	game_lib.mouse_right.update();
 }
 /**
  * マウスのキャンバス上の座標を取得する
@@ -1926,18 +2021,32 @@ function get_mouse_pos(): Vector2 {
 	return game_lib.mouse_pos.copy();
 }
 /**
- * マウスが連続でクリックされているカウントを取得する
- * @returns マウスが連続でクリックされているカウント ( 未クリック状態は 0 )
+ * マウスが連続で左クリックされているカウントを取得する
+ * @returns マウスが連続で左クリックされているカウント ( 未クリック状態は 0 )
  */
 function get_mouse_click(): int {
-	return game_lib.mouse_click_count;
+	return game_lib.mouse_left.button_press_duration;
 }
 /**
- * マウスが連続でクリックされていないカウントを取得する
- * @returns マウスが連続でクリックされていないカウント ( クリック状態は 0 )
+ * マウスが連続で左クリックされていないカウントを取得する
+ * @returns マウスが連続で左クリックされていないカウント ( クリック状態は 0 )
  */
-function get_mouse_no_click(): int {
-	return game_lib.mouse_no_click_count;
+function get_mouse_release(): int {
+	return game_lib.mouse_left.button_release_duration;
+}
+/**
+ * マウスが連続で右クリックされているカウントを取得する
+ * @returns マウスが連続で右クリックされているカウント ( 未クリック状態は 0 )
+ */
+function get_mouse_right_click(): int {
+	return game_lib.mouse_right.button_press_duration;
+}
+/**
+ * マウスが連続で右クリックされていないカウントを取得する
+ * @returns マウスが連続で右クリックされていないカウント ( クリック状態は 0 )
+ */
+function get_mouse_right_release(): int {
+	return game_lib.mouse_right.button_release_duration;
 }
 
 /** マウスホイールイベント ( onmousewheel は非推奨 ) */
@@ -2303,6 +2412,8 @@ function millisecond_to_str(ms: int): string {
 }
 
 
+
+// Math クラスの拡張メソッド
 interface Math {
 	/**
 	 * 配列の総和を取得する
@@ -2333,6 +2444,8 @@ Math.gcd = function (a, b) {
 };
 
 
+
+// CanvasRenderingContext2D クラスの拡張メソッド
 interface CanvasRenderingContext2D {
 	/**
 	 * 左上と右下の座標を指定して矩形を描画する
@@ -2390,9 +2503,10 @@ interface CanvasRenderingContext2D {
 	/**
 	 * カラーブジェクトを文字列に変換する
 	 * @param color_object カラーオブジェクトか、カラーを表す文字列
+	 * @param set_global_alpha カラーオブジェクトの不透明度を GlobalAlpha に設定するかどうか
 	 * @returns カラーを表す文字列
 	 */
-	color_to_str(color_object: Color | string): string;
+	color_to_str(color_object: Color | string, set_global_alpha?: boolean): string;
 	/**
 	 * 左下の座標を指定して文字列を描画する
 	 * @param str 描画する文字列
@@ -2519,20 +2633,17 @@ interface CanvasRenderingContext2D {
 	 */
 	draw_seamless_image(img: any, screen_x: int, screen_y: int, image_x: int, image_y: int, add_x: float, add_y: float): void;
 }
-
-
-
-// 描画関係
 CanvasRenderingContext2D.prototype.draw_box = function (x1, y1, x2, y2, color, fill = true, thickness = 1) {
 	this.save();
 	this.lineWidth = thickness;
 	this.beginPath();
-	this.rect(x1, y1, x2 - x1, y2 - y1);
 	if (fill) {
+		this.rect(x1, y1, x2 - x1, y2 - y1);
 		this.fillStyle = this.color_to_str(color);
 		this.fill();
 	}
 	else {
+		this.rect(x1 + (thickness - 1) / 2, y1 + (thickness - 1) / 2, x2 - x1 - (thickness - 1), y2 - y1 - (thickness - 1));
 		this.strokeStyle = this.color_to_str(color);
 		this.stroke();
 	}
@@ -2542,11 +2653,12 @@ CanvasRenderingContext2D.prototype.draw_circle = function (x, y, radius, color, 
 	this.save();
 	this.lineWidth = thickness;
 	this.beginPath();
-	this.arc(x, y, radius, start_angle, end_angle, counterclockwise);
 	if (fill) {
+		this.arc(x, y, radius, start_angle, end_angle, counterclockwise);
 		this.fillStyle = this.color_to_str(color);
 		this.fill();
 	} else {
+		this.arc(x, y, radius - (thickness - 1) / 2, start_angle, end_angle, counterclockwise);
 		this.strokeStyle = this.color_to_str(color);
 		this.stroke();
 	}
@@ -2578,11 +2690,12 @@ CanvasRenderingContext2D.prototype.font_to_str = function (font_object) {
 			return font_object;
 	}
 };
-CanvasRenderingContext2D.prototype.color_to_str = function (color_object) {
+CanvasRenderingContext2D.prototype.color_to_str = function (color_object, set_global_alpha = true) {
 	switch (typeof color_object) {
 		case "string":
 			return color_object;
 		case "object":
+			if (set_global_alpha) this.globalAlpha = color_object.a;
 			return color_object.to_str();
 		default:
 			print_error_log("不明なオブジェクトが渡されました");
