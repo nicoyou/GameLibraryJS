@@ -6,4 +6,4 @@ call npm install --save-dev @typescript-eslint/parser
 call npm install --save-dev eslint-plugin-import
 call npm install --save-dev typedoc
 
-pause
+timeout /t 5
