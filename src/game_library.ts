@@ -12,8 +12,6 @@ _/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/
 type int = number;
 /** 浮動小数点 */
 type float = number;
-/** 4 つの方向を表す値 */
-type direction_t = int;
 /** キーコード */
 type key_code_t = int;
 /** ラジアン */
@@ -106,9 +104,22 @@ enum BUTTON_STATUS {
 	/** クリックしながらボタン外の範囲に離れる */
 	click_leave,
 }
+/** 上下左右の 4 方向を表す */
+enum DIRECTION {
+	/** 上 */
+	up = 0,
+	/** 右 */
+	right = 1,
+	/** 下 */
+	down = 2,
+	/** 左 */
+	left = 3,
+	/** 不明な方向 */
+	unknown = -1,
+}
 
 /** game_library のバージョン */
-const GAME_LIBRARY_VERSION = "1.0.0";
+const GAME_LIBRARY_VERSION = "1.1.0";
 /** キー入力の種類 */
 const KEY_INPUT_MAX = 256;
 /** Color オブジェクトにおける 3 原色の最大値 */
@@ -157,6 +168,27 @@ class Vector2 {
 		return new Vector2(this.x, this.y);
 	}
 	/**
+	 * 現在の値の小数点以下を四捨五入する
+	 * @returns 四捨五入されたインスタンス
+	 */
+	round(): Vector2 {
+		return new Vector2(Math.round(this.x), Math.round(this.y));
+	}
+	/**
+	 * 現在の値の小数点以下を切り捨てる
+	 * @returns 切り捨てられたインスタンス
+	 */
+	floor(): Vector2 {
+		return new Vector2(Math.floor(this.x), Math.floor(this.y));
+	}
+	/**
+	 * 現在の値の小数点以下を切り上げる
+	 * @returns 切り上げられたインスタンス
+	 */
+	ceil(): Vector2 {
+		return new Vector2(Math.ceil(this.x), Math.ceil(this.y));
+	}
+	/**
 	 * 指定された座標との距離を計算する
 	 * @param other もう一つの座標
 	 * @returns もう一方のベクトルとの距離
@@ -172,6 +204,27 @@ class Vector2 {
 	 */
 	advance(angle: angle_t, length: float): Vector2 {
 		return new Vector2(this.x + Math.cos(angle) * length, this.y + Math.sin(angle) * length);
+	}
+	/**
+	 * 座標を特定の方向に指定分だけ進める
+	 * @param direction 方向
+	 * @param length 直線に進める距離
+	 * @returns 指定された方向にに指定された分だけ進めた座標
+	 */
+	advance_direction(direction: DIRECTION, length: float): Vector2 {
+		switch (direction) {
+			case DIRECTION.up:
+				return this.sub(new Vector2(0, length));
+			case DIRECTION.down:
+				return this.add(new Vector2(0, length));
+			case DIRECTION.right:
+				return this.add(new Vector2(length, 0));
+			case DIRECTION.left:
+				return this.sub(new Vector2(length, 0));
+			default:
+				throw new Error("未定義の direction です");
+		}
+		return this;
 	}
 	/**
 	 * 原点を中心に、指定した角度だけ回転させた座標を取得する
@@ -211,20 +264,6 @@ class Vector2 {
 		return new Vector2(get_rand(this.x), get_rand(this.y));
 	}
 	/**
-	 * x, y のうち大きいほうの値を取得する
-	 * @returns 大きいほうの値
-	 */
-	max(): float {
-		return this.x > this.y ? this.x : this.y;
-	}
-	/**
-	 * x, y のうち小さいほうの値を取得する
-	 * @returns 小さいほうの値
-	 */
-	min(): float {
-		return this.x < this.y ? this.x : this.y;
-	}
-	/**
 	 * 指定された座標との内分点を計算する
 	 * @param other もう一つの座標
 	 * @param t 割合を 0 ~ 1 の間で指定する
@@ -249,10 +288,15 @@ class Vector2 {
 	with_y(y: float): Vector2 {
 		return new Vector2(this.x, y);
 	}
-	/**
-	 * ベクトルの長さを取得する
-	 * @returns ベクトルの長さ
-	 */
+	/** x, y のうち大きいほうの値を取得する */
+	get max(): float {
+		return this.x > this.y ? this.x : this.y;
+	}
+	/** x, y のうち小さいほうの値を取得する */
+	get min(): float {
+		return this.x < this.y ? this.x : this.y;
+	}
+	/** ベクトルの長さを取得する */
 	get length(): float {
 		return Math.sqrt(this.x * this.x + this.y * this.y);
 	}
@@ -422,39 +466,51 @@ class Random {
 	get_rand_bool(true_ratio: float = 0.5): boolean {
 		return (this.get_rand(1) < true_ratio);
 	}
+	/**
+	 * 配列の中からランダムに要素を取得する
+	 * @param array 配列
+	 * @returns 配列の中からランダムに選ばれた要素
+	 */
+	random_choice<T>(array: T[]): T {
+		return array[this.get_rand_int(array.length)];
+	}
+	/**
+	 * 各選択肢の選ばれる割合を指定して、選択肢を取得する
+	 * @param ratio_list 各選択肢の選ばれる割合を指定する
+	 * @returns 選択された選択肢の index
+	 */
+	random_choice_ratio_index(ratio_list: float[]): int {
+		let sum = Math.sum(ratio_list);
+		let rand = this.get_rand(sum);
+		for (let i = 0; i < ratio_list.length; i++) {
+			if (rand < ratio_list[i]) return i;
+			rand -= ratio_list[i];
+		}
+		return ratio_list.length - 1;
+	}
 }
 
-/** 上下左右の4つの方向を保持するクラス */
+/** 上下左右の 4 つの方向を保持するクラス */
 class Direction {
-	/** 上 */
-	static readonly up = 0;
-	/** 右 */
-	static readonly right = 1;
-	/** 下 */
-	static readonly down = 2;
-	/** 左 */
-	static readonly left = 3;
-	/** 不明な方向 */
-	static readonly unknown = 4;
 	/** 保持している方向 */
-	public direction: direction_t;
+	public value: DIRECTION;
 
 	/**
 	 * 方向を指定して初期化する
 	 * @param direction 方向
 	 */
-	constructor(direction: int = Direction.unknown) {
-		this.direction = direction;
+	constructor(direction: int = DIRECTION.unknown) {
+		this.value = direction;
 	}
 	/**
 	 * 右周りにに指定数分だけ方向転換する
 	 * @param num 90° 回転する回数
 	 * @returns 指定回数だけ回転した後の角度
 	 */
-	right_rot(num: int = 1): Direction {
-		if (this.direction == Direction.unknown) return new Direction();		// static 変数は static メソッドからしか this アクセスできない
+	right_rotate(num: int = 1): Direction {
+		if (this.value == DIRECTION.unknown) return new Direction();
 
-		let new_direction = this.direction + num;			// 引き数の数だけ回転させる
+		let new_direction = this.value + num;			// 引き数の数だけ回転させる
 		new_direction %= 4;
 		if (new_direction < 0) new_direction += 4;
 
@@ -465,34 +521,8 @@ class Direction {
 	 * @param num 90° 回転する回数
 	 * @returns 指定回数だけ回転した後の角度
 	 */
-	left_rot(num: int = 1): Direction {
-		return this.right_rot(-num);
-	}
-	/**
-	 * Vector2 型の座標を現在の方向に指定分だけ進める
-	 * @param pos 座標
-	 * @param length 直線に進める距離
-	 * @returns 指定された角度に指定された分だけ進めた座標
-	 */
-	advance_vector2(pos: Vector2, length: float): Vector2 {
-		pos = pos.copy();
-		switch (this.direction) {
-			case Direction.up:
-				pos.y -= length;
-				break;
-			case Direction.down:
-				pos.y += length;
-				break;
-			case Direction.right:
-				pos.x += length;
-				break;
-			case Direction.left:
-				pos.x -= length;
-				break;
-			default:
-				throw new Error("未定義の direction です");
-		}
-		return pos;
+	left_rotate(num: int = 1): Direction {
+		return this.right_rotate(-num);
 	}
 }
 
@@ -589,7 +619,8 @@ class Color {
 
 		if (s == 0) {
 			this.r = this.g = this.b = Math.round(l * COLOR_MAX);
-		} else {
+		}
+		else {
 			const hue_to_rgb = (t: float, s: float, l: float) => {
 				const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
 				const p = 2 * l - q;
@@ -687,7 +718,8 @@ class Color {
 				this.g = parseInt(hex.charAt(1) + hex.charAt(1), 16);
 				this.b = parseInt(hex.charAt(2) + hex.charAt(2), 16);
 				return this;
-			} else if (size === 6) {		// #ff0000
+			}
+			else if (size === 6) {		// #ff0000
 				this.r = parseInt(hex.charAt(0) + hex.charAt(1), 16);
 				this.g = parseInt(hex.charAt(2) + hex.charAt(3), 16);
 				this.b = parseInt(hex.charAt(4) + hex.charAt(5), 16);
@@ -1123,9 +1155,11 @@ class TweenColor extends Tween<Color, float>{
 /** マウスやタップに対応したボタン */
 class ClickButton {
 	/** ボタンの位置 */
-	protected rect: Rectangle;
+	public rect: Rectangle;
 	/** ボタン選択時に呼ばれるコールバックイベント */
 	protected readonly enter_callback: (() => void) | null;
+	/** ボタンがロックされているかどうか ( ロック状態 = クリックイベント無効化 ) */
+	protected is_locked: boolean;
 	/** ボタンのステータス */
 	public status: BUTTON_STATUS;
 
@@ -1133,10 +1167,12 @@ class ClickButton {
 	 * ボタンの位置を指定して初期化する
 	 * @param rect ボタンの位置
 	 * @param enter_callback クリック時のコールバックイベント
+	 * @param is_locked ロック状態フラグ
 	 */
-	constructor(rect: Rectangle, enter_callback: (() => void) | null = null) {
+	constructor(rect: Rectangle, enter_callback: (() => void) | null = null, is_locked: boolean = false) {
 		this.rect = rect.copy();
 		this.enter_callback = enter_callback;
+		this.is_locked = is_locked;
 		this.status = BUTTON_STATUS.normal;
 	}
 	/** オーバーライドしてボタンの状態に対する処理を実装するためのメソッド */
@@ -1180,7 +1216,7 @@ class ClickButton {
 	}
 	/** クリックされているかどうか */
 	get is_click(): boolean {
-		return (this.status == BUTTON_STATUS.click_start || this.status == BUTTON_STATUS.click);
+		return ((this.status == BUTTON_STATUS.click_start || this.status == BUTTON_STATUS.click) && this.is_locked == false);
 	}
 	/** クリックが開始されたフレームかどうか */
 	get is_click_start(): boolean {
@@ -1188,7 +1224,7 @@ class ClickButton {
 	}
 	/** ボタンが決定されたかどうか ( クリックを離した瞬間のフレームかどうか ) */
 	get is_enter(): boolean {
-		return (this.status == BUTTON_STATUS.enter);
+		return (this.status == BUTTON_STATUS.enter && this.is_locked == false);
 	}
 	/** ボタンがアクティブな状態 ( ホバーかクリックされている状態 ) かどうか */
 	get is_active(): boolean {
@@ -1208,27 +1244,36 @@ class ClickButtonAnimation extends ClickButton {
 	protected readonly fill_color_tween: TweenColor;
 	/** アニメーション用カウンタ */
 	protected count: int;
+	/** ロック中にクリックされたら開始するカウンタ */
+	protected locked_click_count: int;
 
 	/**
 	 * ボタンの位置を指定して初期化する
 	 * @param rect ボタンの位置
 	 * @param enter_callback クリック時のコールバックイベント
+	 * @param is_locked ロック状態フラグ
+	 * @param color ボタンの色
 	 * @param start_anim_count アニメーションの初期カウント
 	 */
-	constructor(rect: Rectangle, enter_callback: (() => void) | null = null, color: Color = COLOR.white, start_anim_count: int = 0) {
-		super(rect, enter_callback);
+	constructor(rect: Rectangle, enter_callback: (() => void) | null = null, is_locked: boolean = false, color: Color = COLOR.white, start_anim_count: int = 0) {
+		super(rect, enter_callback, is_locked);
 		this.color = color.copy();
 		this.fill_color_tween = new TweenColor(color.with_a(0.1), 15);
 		this.count = start_anim_count;
+		this.locked_click_count = 0;
 	}
 	/** @inheritdoc */
 	update(): void {
 		super.update();
+		if (this.locked_click_count) this.locked_click_count++;
+		if (this.locked_click_count > 8) this.locked_click_count = 0;
+
 		if (this.is_hover) this.fill_color_tween.dest = this.color.copy();
 		else if (this.is_inactive) this.fill_color_tween.dest = this.color.with_a(0.1);
 		else if (this.is_click) {
 			this.fill_color_tween.dest = this.color.merge(COLOR.black);
 		}
+		else if (this.status == BUTTON_STATUS.click_start && this.is_locked) this.locked_click_count = 1;
 		this.fill_color_tween.approach();
 		this.count++;
 	}
@@ -1240,8 +1285,8 @@ class ClickButtonAnimation extends ClickButton {
 			fill_color.a = fill_color.a * this.animation_mag;
 			color.a = color.a * this.animation_mag;
 		}
-		ctx.draw_box(this.rect.ul_pos.x, this.rect.ul_pos.y + this.adnimation_add_y, this.rect.br_pos.x, this.rect.br_pos.y + this.adnimation_add_y, fill_color);
-		ctx.draw_box(this.rect.ul_pos.x, this.rect.ul_pos.y + this.adnimation_add_y, this.rect.br_pos.x, this.rect.br_pos.y + this.adnimation_add_y, color, false, 3);
+		ctx.draw_box(this.rect.ul_pos.x + this.adnimation_add_x, this.rect.ul_pos.y + this.adnimation_add_y, this.rect.br_pos.x + this.adnimation_add_x, this.rect.br_pos.y + this.adnimation_add_y, fill_color);
+		ctx.draw_box(this.rect.ul_pos.x + this.adnimation_add_x, this.rect.ul_pos.y + this.adnimation_add_y, this.rect.br_pos.x + this.adnimation_add_x, this.rect.br_pos.y + this.adnimation_add_y, color, false, 3);
 	}
 	/** 表示アニメーションの移動量を取得する ( 0 ~ 1 に徐々に変化し、不透明度としてはそのまま使用できる ) */
 	get animation_mag(): float {
@@ -1254,6 +1299,12 @@ class ClickButtonAnimation extends ClickButton {
 			return START_ANIM_ADD_Y - this.animation_mag * START_ANIM_ADD_Y;
 		}
 		if (this.is_click) return 5;			// クリック中は少し下げる
+		if (this.locked_click_count) return get_rand_int_w(5);
+		return 0;
+	}
+	/** ボタンを描画するときの、x の加算値を取得する */
+	get adnimation_add_x(): float {
+		if (this.locked_click_count) return get_rand_int_w(5);
 		return 0;
 	}
 }
@@ -1271,7 +1322,7 @@ class ClickButtonSelectGroup {
 	/** 現在アクティブなボタンがアクティブになってからのカウンター */
 	private active_count: int;
 	/** 全てのボタンステータスを更新しない状態かどうか */
-	public lock: boolean;
+	public is_locked: boolean;
 
 	/**
 	 * コンストラクタ
@@ -1284,11 +1335,11 @@ class ClickButtonSelectGroup {
 		this.select_button_list = [[]];
 		this.active_index = new Vector2();
 		this.active_count = 1;
-		this.lock = false;
+		this.is_locked = false;
 	}
 	/** ボタングループの状態を更新する */
 	update(): void {
-		if (this.lock == false) {
+		if (this.is_locked == false) {
 			if (get_key_long_press(KEY_CODE.RIGHT)) {
 				if (this.active_index.x < this.select_button_list[this.active_index.y].length - 1) {		// 右に移動
 					this.active_index.x++;
@@ -1331,10 +1382,17 @@ class ClickButtonSelectGroup {
 				for (let ix = 0; ix < this.select_button_list[iy].length; ix++) {
 					this.select_button_list[iy][ix].update_status();		// 各ボタンのステータスを最新に更新する
 					if (this.select_button_list[iy][ix].is_active) button_active = new Vector2(ix, iy);
-					if (this.select_button_list[iy][ix].is_enter && this.one_click_only) this.lock = true;
+					if (this.select_button_list[iy][ix].is_enter && this.one_click_only) this.is_locked = true;
 				}
 			}
 			if (button_active !== null && this.active_index.not_equal(button_active)) this.active_index.set(button_active);		// 直接マウスホバーされればアクティブの位置を切り替える
+		}
+		else {																// ロック状態でも前フレームの決定状態は解除する
+			for (let iy = 0; iy < this.select_button_list.length; iy++) {
+				for (let ix = 0; ix < this.select_button_list[iy].length; ix++) {
+					if (this.select_button_list[iy][ix].status == BUTTON_STATUS.enter) this.select_button_list[iy][ix].status = BUTTON_STATUS.normal;
+				}
+			}
 		}
 
 		for (let iy = 0; iy < this.select_button_list.length; iy++) {
@@ -1343,13 +1401,14 @@ class ClickButtonSelectGroup {
 					if (this.select_button_list[iy][ix].is_inactive) {
 						if (this.active_count == 0) {
 							this.select_button_list[iy][ix].status = BUTTON_STATUS.hover_start;
-						} else {
+						}
+						else {
 							this.select_button_list[iy][ix].status = BUTTON_STATUS.hover;
 						}
 					}
 					if (get_keys(...this.enter_key_code_list) == 1) {
 						this.select_button_list[iy][ix].status = BUTTON_STATUS.enter;
-						if (this.one_click_only) this.lock = true;
+						if (this.one_click_only) this.is_locked = true;
 					}
 				}
 				this.select_button_list[iy][ix].update();
@@ -1451,10 +1510,7 @@ class DebugTimer {
 		let back_y_size = str_height * this.time_list.length + STR_PAD;
 		if (draw_fps) back_y_size += str_height;	// フレームレート表示分も背景を長くする
 
-		ctx.save();
-		ctx.globalAlpha = 0.5;
-		ctx.draw_box(this.pos.x, this.pos.y, this.pos.x + process_name_width + 120, this.pos.y + back_y_size, COLOR.black);
-		ctx.restore();
+		ctx.draw_box(this.pos.x, this.pos.y, this.pos.x + process_name_width + 120, this.pos.y + back_y_size, COLOR.black.with_a(0.5));
 		if (this.time_list.length >= 3) {			// step が 3 つ以上登録されていれば途中の処理時間を表示する
 			for (let i = 0; i < this.time_list.length - 1; i++) {
 				ctx.draw_text(this.process_name_list[i], this.pos.x + STR_PAD, y, color, 0, null, font);
@@ -1477,13 +1533,14 @@ class DebugTimer {
 	get frame_rate(): float {
 		if (this.time_list.length >= 2) {
 			return 1000 / (this.time_list[this.time_list.length - 1] - this.time_list[0]);
-		} else {
+		}
+		else {
 			return 0;
 		}
 	}
 }
 
-/** 各図形の抽象クラス */
+/** 各図形の基底クラス */
 abstract class Shape {
 	/** 図形の種類 */
 	public readonly type: SHAPE_TYPE;
@@ -1616,7 +1673,7 @@ class Rectangle extends Shape {
 	 * @param y1 左上の y 座標
 	 * @param x2 右下の x 座標
 	 * @param y2 右下の y 座標
-	 * @returns 
+	 * @returns 値を変更したインスタンス
 	 */
 	from_ulbr(x1: float, y1: float, x2: float, y2: float): Rectangle {
 		this.width = Math.abs(x2 - x1);
@@ -1825,6 +1882,8 @@ namespace game_lib {
 	export let mouse_right: ButtonStatus = new ButtonStatus();
 	/** マウスホイールの移動量 */
 	export let mouse_wheel: int = 0;
+	/** マウスホイールの一フレーム間合計移動量 */
+	export let mouse_wheel_frame: int = 0;
 
 	/** タップ開始位置 */
 	export let touch_s: Vector2 = new Vector2();
@@ -1869,6 +1928,7 @@ function game_lib_update(): void {
 	key_input_update();
 	mouse_input_update();
 	touche_input_update();
+	game_lib.mouse_wheel_frame = game_lib.mouse_wheel;
 	game_lib.mouse_wheel = 0;
 }
 
@@ -1991,7 +2051,8 @@ document.addEventListener("mousemove", e => {
 	if (game_lib.canvas === null) {
 		game_lib.mouse_pos.x = e.clientX;
 		game_lib.mouse_pos.y = e.clientY;
-	} else {
+	}
+	else {
 		game_lib.mouse_pos.x = e.clientX - game_lib.canvas.getBoundingClientRect().x;		// キャンバス内の座標を取得する
 		game_lib.mouse_pos.y = e.clientY - game_lib.canvas.getBoundingClientRect().y;
 		game_lib.mouse_pos.x /= game_lib.canvas.clientWidth / game_lib.canvas.width;		// 表示サイズとキャンバスの実サイズの比率を修正する
@@ -2059,7 +2120,7 @@ document.addEventListener("wheel", e => {
  * @returns スクロール量 ( 下回転は + 上回転は - で移動量を返す )
  */
 function get_mouse_wheel(): int {
-	return game_lib.mouse_wheel;
+	return game_lib.mouse_wheel_frame;
 }
 
 /**
@@ -2097,8 +2158,8 @@ document.ontouchmove = function (event) {
  */
 document.ontouchend = function (event) {
 	game_lib.touch_num = event.touches.length;
-	if (game_lib.touch_num >= 1) {						// 1つ以上入力があれば
-		game_lib.touch_s.set(event.touches[0].pageX, event.touches[0].pageY);		// 入力個数が減っただけなら、残っているほうの座標で初期化する (テレポート対策)
+	if (game_lib.touch_num >= 1) {						// 1 つ以上入力があれば
+		game_lib.touch_s.set(event.touches[0].pageX, event.touches[0].pageY);		// 入力個数が減っただけなら、残っているほうの座標で初期化する ( テレポート対策 )
 		game_lib.touch_m.set(event.touches[0].pageX, event.touches[0].pageY);
 	}
 	if (game_lib.touch_num <= 1) {
@@ -2262,6 +2323,28 @@ function get_rand_bool(true_ratio: float = 0.5): boolean {
 	return (get_rand(1) < true_ratio);
 }
 /**
+ * 配列の中からランダムに要素を取得する
+ * @param array 配列
+ * @returns 配列の中からランダムに選ばれた要素
+ */
+function random_choice<T>(array: T[]): T {
+	return array[get_rand_int(array.length)];
+}
+/**
+ * 各選択肢の選ばれる割合を指定して、選択肢を取得する
+ * @param ratio_list 各選択肢の選ばれる割合を指定する
+ * @returns 選択された選択肢の index
+ */
+function random_choice_ratio_index(ratio_list: float[]): int {
+	let sum = Math.sum(ratio_list);
+	let rand = get_rand(sum);
+	for (let i = 0; i < ratio_list.length; i++) {
+		if (rand < ratio_list[i]) return i;
+		rand -= ratio_list[i];
+	}
+	return ratio_list.length - 1;
+}
+/**
  * 画像の輝度を変更する
  * @param img 変更対象の画像
  * @param r 加算する赤色の含有量
@@ -2323,6 +2406,16 @@ function approach_num(num: float, dest_num: float, add_num: float): float {
 	return dest_num;
 }
 /**
+ * ラジアン角度同士の差を計算する
+ * @param angle1 左辺の角度
+ * @param angle2 右辺の角度
+ * @returns ラジアン角度同士の差
+ */
+function get_angle_diff(angle1: angle_t, angle2: angle_t): angle_t {
+	const difference = angle1 - angle2;
+	return ((difference % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
+}
+/**
  * ラジアン角度 angle を dest_angle まで最短ルートで add_angle だけ近づける
  * @param angle 角度
  * @param dest_angle 目標とする角度
@@ -2330,16 +2423,10 @@ function approach_num(num: float, dest_num: float, add_num: float): float {
  * @returns angle を dest_angle まで最短ルートで add_angle だけ近づけた角度
  */
 function approach_angle(angle: angle_t, dest_angle: angle_t, add_angle: angle_t): angle_t {
-	angle = normalize_angle(angle);
-	dest_angle = normalize_angle(dest_angle);
-
-	angle -= dest_angle;
-	angle = normalize_angle(angle);
-
-	if (angle >= Math.PI && angle < Math.PI * 2 - add_angle) angle += add_angle;			// 角度を目標角度に修正する
-	if (angle <= Math.PI && angle > add_angle) angle -= add_angle;							// 角度を目標角度に修正する
-	if (angle > Math.PI * 2 - add_angle || angle < add_angle) angle = 0;					// 目標と同じ角度をセットする
-	return angle + dest_angle;
+	const diff = get_angle_diff(dest_angle, angle);
+	if (diff > add_angle) return angle + add_angle;
+	else if (diff < -add_angle) return angle - add_angle;
+	return dest_angle;
 }
 /**
  * 0 ~ 1 の値を徐々に減速しながら増加していく 0 ~ 1 の値に変換する
@@ -2377,7 +2464,8 @@ function get_cubic_bezier_point(t: float, control_point_x: float = 0.9, control_
 
 	if (t === 0) {
 		return control_points[0].y;
-	} else if (t === 1) {
+	}
+	else if (t === 1) {
 		return control_points[3].y;
 	}
 
@@ -2448,6 +2536,16 @@ Math.gcd = function (a, b) {
 // CanvasRenderingContext2D クラスの拡張メソッド
 interface CanvasRenderingContext2D {
 	/**
+	 * 線を描画する
+	 * @param x1 描画開始位置の x 座標
+	 * @param y1 描画開始位置の y 座標
+	 * @param x2 描画終了位置の x 座標
+	 * @param y2 描画終了位置の y 座標
+	 * @param color 色
+	 * @param thickness 線の太さ
+	 */
+	draw_line(x1: float, y1: float, x2: float, y2: float, color: Color | string, thickness?: float): void;
+	/**
 	 * 左上と右下の座標を指定して矩形を描画する
 	 * @param x1 左上の x 座標
 	 * @param y1 左上の y 座標
@@ -2456,8 +2554,9 @@ interface CanvasRenderingContext2D {
 	 * @param color 色
 	 * @param fill 塗りつぶすかどうか
 	 * @param thickness 塗りつぶさない場合は枠線の太さ
+	 * @param angle 回転角度
 	 */
-	draw_box(x1: number, y1: number, x2: number, y2: number, color: Color | string, fill?: boolean, thickness?: int): void;
+	draw_box(x1: float, y1: float, x2: float, y2: float, color: Color | string, fill?: boolean, thickness?: int, angle?: angle_t): void;
 	/**
 	 * 円を描画する
 	 * @param x 中心の x 座標
@@ -2470,17 +2569,19 @@ interface CanvasRenderingContext2D {
 	 * @param end_angle 描画を終了する角度
 	 * @param counterclockwise 反時計回りに描画するかどうか
 	 */
-	draw_circle(x: number, y: number, radius: number, color: Color | string, fill?: boolean, thickness?: int, start_angle?: angle_t, end_angle?: angle_t, counterclockwise?: boolean): void;
+	draw_circle(x: float, y: float, radius: float, color: Color | string, fill?: boolean, thickness?: int, start_angle?: angle_t, end_angle?: angle_t, counterclockwise?: boolean): void;
 	/**
-	 * 線を描画する
-	 * @param x1 描画開始位置の x 座標
-	 * @param y1 描画開始位置の y 座標
-	 * @param x2 描画終了位置の x 座標
-	 * @param y2 描画終了位置の y 座標
+	 * 三角を描画する
+	 * @param x 中心の x 座標
+	 * @param y 中心の y 座標
+	 * @param base_length 底辺の長さ
+	 * @param height 高さ
 	 * @param color 色
-	 * @param thickness 線の太さ
+	 * @param fill 塗りつぶすかどうか
+	 * @param thickness 塗りつぶさない場合は枠線の太さ
+	 * @param angle 三角形の向き
 	 */
-	draw_line(x1: number, y1: number, x2: number, y2: number, color: Color | string, thickness?: number): void;
+	draw_triangle(x: float, y: float, base_length: float, height: float, color: Color | string, fill?: boolean, thickness?: int, angle?: angle_t): void;
 	/**
 	 * プログレスバーを描画する
 	 * @param x1 左上の x 座標
@@ -2493,7 +2594,7 @@ interface CanvasRenderingContext2D {
 	 * @param color2 プログレスバーの色
 	 * @param thickness プログレスバーの枠の太さ
 	 */
-	draw_progress_bar(x1: number, y1: number, x2: number, y2: number, now: number, max: number, color1: Color | string, color2: Color | string, thickness?: number): void;
+	draw_progress_bar(x1: float, y1: float, x2: float, y2: float, now: float, max: float, color1: Color | string, color2: Color | string, thickness?: float): void;
 	/**
 	 * フォントオブジェクトを文字列に変換する
 	 * @param font_object フォントオブジェクトか、フォント情報を表す文字列
@@ -2517,7 +2618,7 @@ interface CanvasRenderingContext2D {
 	 * @param outline_color アウトラインの色
 	 * @param font フォント
 	 */
-	draw_text(str: string, x: number, y: number, color: Color | string, outline_thickness?: number | null, outline_color?: Color | string | null, font?: Font | string | null): void;
+	draw_text(str: string, x: float, y: float, color: Color | string, outline_thickness?: float | null, outline_color?: Color | string | null, font?: Font | string | null): void;
 	/**
 	 * 右下の座標を指定して文字列を描画する
 	 * @param str 描画する文字列
@@ -2528,7 +2629,7 @@ interface CanvasRenderingContext2D {
 	 * @param outline_color アウトラインの色
 	 * @param font フォント
 	 */
-	draw_text_right(str: string, x: number, y: number, color: Color | string, outline_thickness?: number | null, outline_color?: Color | string | null, font?: Font | string | null): void;
+	draw_text_right(str: string, x: float, y: float, color: Color | string, outline_thickness?: float | null, outline_color?: Color | string | null, font?: Font | string | null): void;
 	/**
 	 * x が中央、y が下の座標を指定して文字列を描画する
 	 * @param str 描画する文字列
@@ -2539,7 +2640,7 @@ interface CanvasRenderingContext2D {
 	 * @param outline_color アウトラインの色
 	 * @param font フォント
 	 */
-	draw_text_center(str: string, x: number, y: number, color: Color | string, outline_thickness?: number | null, outline_color?: Color | string | null, font?: Font | string | null): void;
+	draw_text_center(str: string, x: float, y: float, color: Color | string, outline_thickness?: float | null, outline_color?: Color | string | null, font?: Font | string | null): void;
 	/**
 	 * 中心の座標を指定して文字列を描画する
 	 * @param str 描画する文字列
@@ -2550,7 +2651,7 @@ interface CanvasRenderingContext2D {
 	 * @param outline_color アウトラインの色
 	 * @param font フォント
 	 */
-	draw_text_center_y(str: string, x: number, y: number, color: Color | string, outline_thickness?: number | null, outline_color?: Color | string | null, font?: Font | string | null): void;
+	draw_text_center_y(str: string, x: float, y: float, color: Color | string, outline_thickness?: float | null, outline_color?: Color | string | null, font?: Font | string | null): void;
 	/**
 	 * 左上の座標を指定して文字列を描画し、改行文字で改行する
 	 * @param str 描画する文字列
@@ -2562,7 +2663,19 @@ interface CanvasRenderingContext2D {
 	 * @param font フォント
 	 * @param pad_y 改行時の y 座標の間隔
 	 */
-	draw_text_new_line(str: string, x: number, y: number, color: Color | string, outline_thickness?: number | null, outline_color?: Color | string | null, font?: Font | string | null, pad_y?: float): void;
+	draw_text_new_line(str: string, x: float, y: float, color: Color | string, outline_thickness?: float | null, outline_color?: Color | string | null, font?: Font | string | null, pad_y?: float): void;
+	/**
+	 * x が中央、y が下の座標を指定して文字列を描画し、改行文字で改行する
+	 * @param str 描画する文字列
+	 * @param x 中央の x 座標
+	 * @param y 中央下の y 座標
+	 * @param color 色
+	 * @param outline_thickness アウトラインの太さ
+	 * @param outline_color アウトラインの色
+	 * @param font フォント
+	 * @param pad_y 改行時の y 座標の間隔
+	 */
+	draw_text_center_new_line(str: string, x: float, y: float, color: Color | string, outline_thickness?: float | null, outline_color?: Color | string | null, font?: Font | string | null, pad_y?: float): void;
 	/**
 	 * フォントを適応した文字の横幅を取得する
 	 * @param str 横幅を取得する文字列
@@ -2600,7 +2713,7 @@ interface CanvasRenderingContext2D {
 	 * @param s_width 画像の一部を表示する場合に指定する、表示する範囲の横幅
 	 * @param s_height 画像の一部を表示する場合に指定する、表示する範囲の高さ
 	 */
-	draw_image(img: any, x: number, y: number, width?: number | null, height?: number | null, sx?: number | null, sy?: number | null, s_width?: number | null, s_height?: number | null): void;
+	draw_image(img: HTMLImageElement | HTMLCanvasElement, x: float, y: float, width?: float | null, height?: float | null, sx?: float | null, sy?: float | null, s_width?: float | null, s_height?: float | null): void;
 	/**
 	 * 画像を回転描画する
 	 * @param img 描画する画像
@@ -2609,7 +2722,7 @@ interface CanvasRenderingContext2D {
 	 * @param angle 回転する角度
 	 * @param scale 表示する画像の拡大率
 	 */
-	draw_rota_image(img: any, x: number, y: number, angle?: angle_t, scale?: float): void;
+	draw_rota_image(img: HTMLImageElement | HTMLCanvasElement, x: float, y: float, angle?: angle_t, scale?: float): void;
 	/**
 	 * 画像を疑似的に 3D 描画する
 	 * @param img 描画する画像
@@ -2620,7 +2733,7 @@ interface CanvasRenderingContext2D {
 	 * @param angle_y オイラー角で画像の回転角度を指定する
 	 * @param scale 表示する画像の拡大率
 	 */
-	draw_rota_image_3d(img: any, x: number, y: number, angle_z?: angle_t, angle_x?: angle_t, angle_y?: angle_t, scale?: float): void;
+	draw_rota_image_3d(img: HTMLImageElement | HTMLCanvasElement, x: float, y: float, angle_z?: angle_t, angle_x?: angle_t, angle_y?: angle_t, scale?: float): void;
 	/**
 	 * シームレス画像を指定された範囲に描画する
 	 * @param img 描画する画像
@@ -2633,8 +2746,22 @@ interface CanvasRenderingContext2D {
 	 */
 	draw_seamless_image(img: any, screen_x: int, screen_y: int, image_x: int, image_y: int, add_x: float, add_y: float): void;
 }
-CanvasRenderingContext2D.prototype.draw_box = function (x1, y1, x2, y2, color, fill = true, thickness = 1) {
+CanvasRenderingContext2D.prototype.draw_line = function (x1, y1, x2, y2, color, thickness = 1) {
 	this.save();
+	this.strokeStyle = this.color_to_str(color);
+	this.lineWidth = thickness;
+	this.beginPath();
+	this.moveTo(x1, y1);
+	this.lineTo(x2, y2);
+	this.stroke();
+	this.restore();
+};
+CanvasRenderingContext2D.prototype.draw_box = function (x1, y1, x2, y2, color, fill = true, thickness = 1, angle = 0) {
+	this.save();
+	this.translate((x1 + x2) / 2, (y1 + y2) / 2);		// 回転の中心点を設定
+	this.rotate(angle);									// 指定された角度だけ回転させる
+	this.translate(-(x1 + x2) / 2, -(y1 + y2) / 2);		// 中心点を元に戻す
+
 	this.lineWidth = thickness;
 	this.beginPath();
 	if (fill) {
@@ -2657,21 +2784,38 @@ CanvasRenderingContext2D.prototype.draw_circle = function (x, y, radius, color, 
 		this.arc(x, y, radius, start_angle, end_angle, counterclockwise);
 		this.fillStyle = this.color_to_str(color);
 		this.fill();
-	} else {
+	}
+	else {
 		this.arc(x, y, radius - (thickness - 1) / 2, start_angle, end_angle, counterclockwise);
 		this.strokeStyle = this.color_to_str(color);
 		this.stroke();
 	}
 	this.restore();
 };
-CanvasRenderingContext2D.prototype.draw_line = function (x1, y1, x2, y2, color, thickness = 1) {
+CanvasRenderingContext2D.prototype.draw_triangle = function (x, y, base_length, height, color, fill = true, thickness = 1, angle = 0) {
 	this.save();
-	this.strokeStyle = this.color_to_str(color);
+	this.translate(x, y);								// 回転の中心点を設定
+	this.rotate(angle);									// 指定された角度だけ回転させる
+	this.translate(-x, -y);								// 中心点を元に戻す
+
 	this.lineWidth = thickness;
 	this.beginPath();
-	this.moveTo(x1, y1);
-	this.lineTo(x2, y2);
-	this.stroke();
+	if (fill) {
+		this.moveTo(x, y - height / 2);
+		this.lineTo(x - base_length / 2, y + height / 2);
+		this.lineTo(x + base_length / 2, y + height / 2);
+		this.closePath();
+		this.fillStyle = this.color_to_str(color);
+		this.fill();
+	}
+	else {
+		this.moveTo(x, y - height / 2 + (thickness - 1) / 2);
+		this.lineTo(x - base_length / 2 + (thickness - 1) / 2, y + height / 2 - (thickness - 1) / 2);
+		this.lineTo(x + base_length / 2 - (thickness - 1) / 2, y + height / 2 - (thickness - 1) / 2);
+		this.closePath();
+		this.strokeStyle = this.color_to_str(color);
+		this.stroke();
+	}
 	this.restore();
 };
 CanvasRenderingContext2D.prototype.draw_progress_bar = function (x1, y1, x2, y2, now, max, color1, color2, thickness = 5) {
@@ -2732,6 +2876,14 @@ CanvasRenderingContext2D.prototype.draw_text_new_line = function (str, x, y, col
 		y += this.get_height_str(row, font) + pad_y;
 	}
 };
+CanvasRenderingContext2D.prototype.draw_text_center_new_line = function (str, x, y, color, outline_thickness = 0, outline_color = COLOR.white, font = null, pad_y = 5) {
+	const text_list = str.split("\n");
+	y += + this.get_height_str(text_list[0], font) + 1;
+	for (const row of text_list) {
+		this.draw_text_center(row, x, y, color, outline_thickness, outline_color, font);
+		y += this.get_height_str(row, font) + pad_y;
+	}
+};
 CanvasRenderingContext2D.prototype.get_width_str = function (str, font = null) {
 	this.save();
 	if (font !== null) this.font = this.font_to_str(font);
@@ -2778,18 +2930,15 @@ CanvasRenderingContext2D.prototype.draw_image = function (img, x, y, width = nul
 			print_error_log("引数エラー");
 			return;
 		}
-
 		this.drawImage(img, sx, sy, s_width, s_height, x, y, width, height);		// 画像を描画
 	}
 	else {
-		width ??= img.width;
-		height ??= img.height;
+		width ??= img?.width;
+		height ??= img?.height;
 
 		if (width === null || height === null || width === undefined || height === undefined) {
-			print_error_log("引数エラー");
-			return;
+			return;										// 正常ではない画像の場合は描画しない
 		}
-
 		this.drawImage(img, x, y, width, height);		// 画像を描画
 	}
 };
@@ -2835,16 +2984,14 @@ CanvasRenderingContext2D.prototype.draw_rota_image_3d = function (img, x, y, ang
 	this.drawImage(img, (x / (scale * (angle_y / Math.PI)) - img.width / 2), (y / (scale * (angle_x / Math.PI)) - img.height / 2), img.width, img.height);		// 画像を描画
 	this.restore();
 };
-CanvasRenderingContext2D.prototype.draw_seamless_image = function (img, screen_x, screen_y, image_x, image_y, add_x, add_y) {
+CanvasRenderingContext2D.prototype.draw_seamless_image = function (img, screen_width, screen_height, image_width, image_height, add_x, add_y) {
 	let count = 0;
-	add_x = add_x % image_x;
-	add_y = add_y % image_y;
-	if (add_x > 0) add_x -= screen_x;
-	if (add_y > 0) add_y -= screen_y;
+	const start_x = -image_width + (add_x % image_width);
+	const start_y = -image_height + (add_y % image_height);
 
-	for (let iy = -1; iy * image_y + add_y < screen_y; iy++) {
-		for (let ix = -1; ix * image_x + add_x < screen_x; ix++) {
-			this.drawImage(img, Math.floor(ix * image_x + add_x), Math.floor(iy * image_y + add_y), image_x, image_y);
+	for (let iy = start_y; iy < screen_height; iy += image_height) {
+		for (let ix = start_x; ix < screen_width; ix += image_width) {
+			this.draw_image(img, Math.floor(ix), Math.floor(iy), image_width, image_height);
 			count++;
 		}
 	}
@@ -2887,4 +3034,17 @@ function date_to_string(date: Date, include_seconds: boolean = true): string {
 	let result = date.getFullYear() + "/" + zero_pad(date.getMonth() + 1, 2) + "/" + zero_pad(date.getDate(), 2) + " " + zero_pad(date.getHours(), 2) + ":" + zero_pad(date.getMinutes(), 2);
 	if (include_seconds) result += ":" + zero_pad(date.getSeconds(), 2);
 	return result;
+}
+/**
+ * 特定の文字列のプレースホルダを引数で渡された文字で置き換える
+ * @param str 置換前文字列 プレースホルダを `{0}`, `{1}` の形式で埋め込む
+ * @param args 第 2 引数以降で、置換する文字列を指定する
+ * @returns 置き換えられた文字列
+ */
+function str_format(str: string, ...args: unknown[]): string {
+	for (const [i, arg] of args.entries()) {
+		const regExp = new RegExp(`\\{${i}\\}`, "g");
+		str = str.replace(regExp, arg as string);
+	}
+	return str;
 }
