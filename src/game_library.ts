@@ -1200,11 +1200,11 @@ class ClickButton {
 		}
 	}
 	/** オーバーライド用のボタンを描画するメソッド ( デフォルトでデバッグ用のボタンが描画される ) */
-	draw(): void {
+	draw(ctx?: CanvasRenderingContext2D): void {
 		let color = COLOR.white;
 		if (this.is_hover) color = COLOR.p_yellow;
 		if (this.is_click) color = COLOR.gray;
-		ctx.draw_box(this.rect.ul_pos.x, this.rect.ul_pos.y, this.rect.br_pos.x, this.rect.br_pos.y, color);
+		if (ctx) ctx.draw_box(this.rect.ul_pos.x, this.rect.ul_pos.y, this.rect.br_pos.x, this.rect.br_pos.y, color);
 	}
 	/** マウスがホバー状態かどうか */
 	get is_hover(): boolean {
@@ -1278,15 +1278,17 @@ class ClickButtonAnimation extends ClickButton {
 		this.count++;
 	}
 	/** @inheritdoc */
-	draw(): void {
+	draw(ctx?: CanvasRenderingContext2D): void {
 		let fill_color = this.fill_color_tween.value.copy();
 		let color = this.color.copy();
 		if (this.animation_mag < 1) {			// アニメーション中はパラメーターをアニメーションする
 			fill_color.a = fill_color.a * this.animation_mag;
 			color.a = color.a * this.animation_mag;
 		}
-		ctx.draw_box(this.rect.ul_pos.x + this.adnimation_add_x, this.rect.ul_pos.y + this.adnimation_add_y, this.rect.br_pos.x + this.adnimation_add_x, this.rect.br_pos.y + this.adnimation_add_y, fill_color);
-		ctx.draw_box(this.rect.ul_pos.x + this.adnimation_add_x, this.rect.ul_pos.y + this.adnimation_add_y, this.rect.br_pos.x + this.adnimation_add_x, this.rect.br_pos.y + this.adnimation_add_y, color, false, 3);
+		if (ctx) {
+			ctx.draw_box(this.rect.ul_pos.x + this.adnimation_add_x, this.rect.ul_pos.y + this.adnimation_add_y, this.rect.br_pos.x + this.adnimation_add_x, this.rect.br_pos.y + this.adnimation_add_y, fill_color);
+			ctx.draw_box(this.rect.ul_pos.x + this.adnimation_add_x, this.rect.ul_pos.y + this.adnimation_add_y, this.rect.br_pos.x + this.adnimation_add_x, this.rect.br_pos.y + this.adnimation_add_y, color, false, 3);
+		}
 	}
 	/** 表示アニメーションの移動量を取得する ( 0 ~ 1 に徐々に変化し、不透明度としてはそのまま使用できる ) */
 	get animation_mag(): float {
