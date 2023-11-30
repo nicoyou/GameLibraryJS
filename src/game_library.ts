@@ -121,7 +121,7 @@ enum DIRECTION {
 }
 
 /** game_library のバージョン */
-const GAME_LIBRARY_VERSION = "1.1.0";
+const GAME_LIBRARY_VERSION = "1.2.0";
 /** キー入力の種類 */
 const KEY_INPUT_MAX = 256;
 /** Color オブジェクトにおける 3 原色の最大値 */
