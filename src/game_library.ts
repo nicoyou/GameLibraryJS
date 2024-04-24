@@ -87,7 +87,7 @@ enum SHAPE_TYPE {
 	/** 矩形 */
 	rectangle,
 }
-/** ClickButton の状態 */
+/** ClickableButton の状態 */
 enum BUTTON_STATUS {
 	/** デフォルト状態 */
 	normal,
@@ -121,7 +121,7 @@ enum DIRECTION {
 }
 
 /** game_library のバージョン */
-const GAME_LIBRARY_VERSION = "1.2.0";
+const GAME_LIBRARY_VERSION = "1.3.0";
 /** キー入力の種類 */
 const KEY_INPUT_MAX = 256;
 /** Color オブジェクトにおける 3 原色の最大値 */
@@ -132,6 +132,15 @@ const DEFAULT_FONT_NAME = "sans-serif";
 const DEFAULT_FONT_SIZE = 16;
 /** 文字列からカラータグとカラータグに囲まれた文字列を抜き出す正規表現 */
 const TAG_PATTERN = /<#([A-Fa-f0-9]{6})>(.*?)<\/>/g;
+
+
+
+/** copy メソッドを持つクラスのインターフェース */
+interface copyable_t<T> {
+	copy(): T;
+}
+
+
 
 /** 2次元の値を保持する */
 class Vector2 {
@@ -292,6 +301,32 @@ class Vector2 {
 	public with_y(y: float): Vector2 {
 		return new Vector2(this.x, y);
 	}
+	/**
+	 * 指定された時間で指定された座標に移動するアニメーションを設定する
+	 * @param dest 目標の座標
+	 * @param duration アニメーションの時間 ( 秒 )
+	 */
+	public tween_to(dest: Vector2, duration: float): void {
+		game_lib.tween_events.push(new TweenEventVector2(this, dest, duration));
+	}
+	/**
+	 * ランダムな Vector2 を取得する
+	 * @param max 乱数の最大値
+	 * @param min 乱数の最小値
+	 * @returns ランダムな Vector2
+	 */
+	public static random(max: float = 1, min: float = 0): Vector2 {
+		return new Vector2(get_rand(max, min), get_rand(max, min));
+	}
+	/**
+	 * 0 が中心となるランダムな Vector2 を取得する
+	 * @param width_max 絶対値の最大値 ( 3 を指定した場合は -3 ~ 3 の乱数を得る )
+	 * @param width_min 絶対値の最小値
+	 * @returns 指定された範囲内の乱数
+	 */
+	public static random_w(width_max: float, width_min: float = 0): Vector2 {
+		return new Vector2(get_rand_w(width_max, width_min), get_rand_w(width_max, width_min));
+	}
 	/** x, y のうち大きいほうの値を取得する */
 	public get max(): float {
 		return this.x > this.y ? this.x : this.y;
@@ -377,6 +412,31 @@ class Vector2 {
 		if (typeof other == "object") return (this.x > other.x && this.y > other.y);
 		else return this.greater(new Vector2(other, other));
 	}
+
+	/** x=0, y=0 のベクトルを取得する */
+	public static get zero(): Vector2 {
+		return new Vector2(0, 0);
+	}
+	/** x=1, y=1 のベクトルを取得する */
+	public static get one(): Vector2 {
+		return new Vector2(1, 1);
+	}
+	/** x=0, y=-1 のベクトルを取得する */
+	public static get up(): Vector2 {
+		return new Vector2(0, -1);
+	}
+	/** x=0, y=1 のベクトルを取得する */
+	public static get down(): Vector2 {
+		return new Vector2(0, 1);
+	}
+	/** x=1, y=0 のベクトルを取得する */
+	public static get right(): Vector2 {
+		return new Vector2(1, 0);
+	}
+	/** x=-1, y=0 のベクトルを取得する */
+	public static get left(): Vector2 {
+		return new Vector2(-1, 0);
+	}
 }
 
 /** シード値を設定して、実行結果を再現できる乱数生成クラス ( XorShift ) */
@@ -415,7 +475,7 @@ class Random {
 	 * @param min 最小値
 	 * @returns 最大値から最小値までの乱数
 	 */
-	public get_rand(max: float = 1, min: float = 0): float {
+	public get(max: float = 1, min: float = 0): float {
 		if (max < min) {
 			print_error_log("max より大きな min が指定されました [max=" + max + ", min=" + min + "]");
 			const temp = max;
@@ -430,14 +490,14 @@ class Random {
 	 * @param width_min 絶対値の最小値
 	 * @returns 指定された範囲内の乱数
 	 */
-	public get_rand_w(width_max: float, width_min: float = 0): float {
+	public get_w(width_max: float, width_min: float = 0): float {
 		if (width_max < width_min) {
 			print_error_log("width_max より大きな width_min が指定されました [width_max=" + width_max + ", width_min=" + width_min + "]");
 			const temp = width_max;
 			width_max = width_min;
 			width_min = temp;
 		}
-		let width = this.get_rand((width_max - width_min) * 2);
+		let width = this.get((width_max - width_min) * 2);
 		width -= (width_max - width_min);
 		if (width >= 0) return width + width_min;
 		else return width - width_min;
@@ -448,8 +508,8 @@ class Random {
 	 * @param min 最小値
 	 * @returns ( min ～ max - 1 ) の乱数を取得する
 	 */
-	public get_rand_int(max: int, min: int = 0): int {
-		return Math.floor(this.get_rand(max, min));
+	public get_int(max: int, min: int = 0): int {
+		return Math.floor(this.get(max, min));
 	}
 	/**
 	 * 0 が中心で整数の乱数を取得する
@@ -457,8 +517,8 @@ class Random {
 	 * @param width_min 絶対値の最小値
 	 * @returns 指定された範囲内の乱数を取得するが、width_min を出力する確率はほとんど無い
 	 */
-	public get_rand_int_w(width_max: int, width_min: int = 0): int {
-		const n = this.get_rand_w(width_max, width_min);
+	public get_int_w(width_max: int, width_min: int = 0): int {
+		const n = this.get_w(width_max, width_min);
 		if (n >= 0) return Math.ceil(n);
 		return Math.floor(n);
 	}
@@ -467,16 +527,16 @@ class Random {
 	 * @param true_ratio 結果が true になる確率を 0 ~ 1 の間で指定する ( デフォルトは 50% )
 	 * @returns true か false
 	 */
-	public get_rand_bool(true_ratio: float = 0.5): boolean {
-		return (this.get_rand(1) < true_ratio);
+	public get_bool(true_ratio: float = 0.5): boolean {
+		return (this.get(1) < true_ratio);
 	}
 	/**
 	 * 配列の中からランダムに要素を取得する
 	 * @param array 配列
 	 * @returns 配列の中からランダムに選ばれた要素
 	 */
-	public random_choice<T>(array: T[]): T {
-		return array[this.get_rand_int(array.length)];
+	public choice<T>(array: T[]): T {
+		return array[this.get_int(array.length)];
 	}
 	/**
 	 * 各選択肢の選ばれる割合を指定して、選択肢を取得する
@@ -485,7 +545,7 @@ class Random {
 	 */
 	public random_choice_ratio_index(ratio_list: float[]): int {
 		let sum = Math.sum(ratio_list);
-		let rand = this.get_rand(sum);
+		let rand = this.get(sum);
 		for (let i = 0; i < ratio_list.length; i++) {
 			if (rand < ratio_list[i]) return i;
 			rand -= ratio_list[i];
@@ -517,7 +577,6 @@ class Direction {
 		let new_direction = this.value + num;			// 引き数の数だけ回転させる
 		new_direction %= 4;
 		if (new_direction < 0) new_direction += 4;
-
 		return new Direction(new_direction);
 	}
 	/**
@@ -527,6 +586,20 @@ class Direction {
 	 */
 	public left_rotate(num: int = 1): Direction {
 		return this.right_rotate(-num);
+	}
+	/** ラジアン */
+	public get angle(): angle_t {
+		switch (this.value) {
+			case DIRECTION.right:
+				return 0;
+			case DIRECTION.down:
+				return Math.PI * 0.5;
+			case DIRECTION.left:
+				return Math.PI;
+			case DIRECTION.up:
+				return Math.PI * 1.5;
+		}
+		return 0;
 	}
 }
 
@@ -582,8 +655,11 @@ class Color {
 				this.hex = r;
 				return this;
 			}
-			else if (typeof r == "object") {
+			else if (r instanceof Color) {
 				return this.set_rgba(r.r, r.g, r.b, r.a);
+			}
+			else {
+				throw new Error("引数エラー");
 			}
 		}
 		if (typeof r == "number" && typeof g == "number" && typeof b == "number") {
@@ -840,7 +916,7 @@ class Color {
 	 * @param other 比較対象の色
 	 * @returns 完全に同じ色の場合は true
 	 */
-	public equal(other: Color): boolean {
+	public equals(other: Color): boolean {
 		return (this.equal_rgb(other) && this.a == other.a);
 	}
 	/**
@@ -857,17 +933,42 @@ class Color {
 	 * @param tolerance 同じ色とみなす誤差の閾値
 	 * @returns 似た色なら true
 	 */
-	public nearly_equal(other: Color, tolerance: float = COLOR_MAX * 0.1): boolean {
+	public nearly_equals(other: Color, tolerance: float = COLOR_MAX * 0.1): boolean {
 		return this.equal_rgb(other.approach(this, tolerance));
 	}
 	/**
 	 * 現在の色に特定の色かスカラーを加算した色を取得する
 	 * @param other 加算する色か、数値 ( 数値を指定した場合は r, g, b それぞれに数値を加算する )
-	 * @returns 指定された色を加算した色
+	 * @returns 指定されたかスカラーを加算した色
 	 */
 	public add(other: Color | float): Color {
-		if (typeof other == "object") return new Color(this.r + other.r, this.g + other.g, this.b + other.b, this.a);
+		if (other instanceof Color) return new Color(this.r + other.r, this.g + other.g, this.b + other.b, this.a);
 		else return new Color(this.r + other, this.g + other, this.b + other, this.a);
+	}
+	/**
+	 * 現在の色に特定の色かスカラーを減算した色を取得する
+	 * @param other 減算する色か、数値 ( 数値を指定した場合は r, g, b それぞれの数値から減算する )
+	 * @returns 指定された色かスカラーを減算した色
+	 */
+	public sub(other: Color | float): Color {
+		if (other instanceof Color) return new Color(this.r - other.r, this.g - other.g, this.b - other.b, this.a);
+		else return new Color(this.r - other, this.g - other, this.b - other, this.a);
+	}
+	/**
+	 * 現在の色に特定のスカラーを乗算した色を取得する
+	 * @param other 乗算する数値
+	 * @returns 指定された数値を乗算した色
+	 */
+	public mul(other: float): Color {
+		return new Color(this.r * other, this.g * other, this.b * other, this.a);
+	}
+	/**
+	 * 現在の色に特定のスカラーを除算した色を取得する
+	 * @param other 除算する数値
+	 * @returns 指定された数値を除算した色
+	 */
+	public div(other: float): Color {
+		return new Color(this.r / other, this.g / other, this.b / other, this.a);
 	}
 	/**
 	 * 複数の色を混ぜ合わせる
@@ -889,17 +990,25 @@ class Color {
 		return new Color(Math.floor(r / (others.length + 1)), Math.floor(g / (others.length + 1)), Math.floor(b / (others.length + 1)), Math.floor(a / (others.length + 1)));
 	}
 	/**
+	 * 指定された時間で指定された色に変化するアニメーションを設定する
+	 * @param dest 目標とする色
+	 * @param duration アニメーションの時間 ( 秒 )
+	 */
+	public tween_to(dest: Color, duration: float): void {
+		game_lib.tween_events.push(new TweenEventColor(this, dest, duration));
+	}
+	/**
 	 * ランダムな色を取得する ( 不透明度は 1 固定 )
 	 * @returns ランダムな色
 	 */
-	public get_random(): Color {
+	public static get random(): Color {
 		return new Color(get_rand_int(COLOR_MAX), get_rand_int(COLOR_MAX), get_rand_int(COLOR_MAX), 1);
 	}
 	/**
 	 * ランダムで綺麗な色を取得する
 	 * @returns 特定のあまりきれいではない色を排除したランダムな色を取得する
 	 */
-	public get_random_bright(): Color {
+	public static get random_bright(): Color {
 		const MOVE_VALUE = 25;
 		let co = new Array(3);
 		let max_value = 0;
@@ -995,6 +1104,131 @@ class Color {
 
 		return (Math.max(r, g, b) + Math.min(r, g, b)) / 2;
 	}
+
+	/** 赤色 */
+	public static get red(): Color {
+		return new Color(255, 0, 0);
+	}
+	/** 緑色 */
+	public static get green(): Color {
+		return new Color(0, 255, 0);
+	}
+	/** 青色 */
+	public static get blue(): Color {
+		return new Color(0, 0, 255);
+	}
+	/** 桃色 */
+	public static get pink(): Color {
+		return new Color(255, 0, 255);
+	}
+	/** 黄色 */
+	public static get yellow(): Color {
+		return new Color(255, 255, 0);
+	}
+	/** 水色 */
+	public static get aqua(): Color {
+		return new Color(0, 255, 255);
+	}
+
+	/** パステル版 赤色 */
+	public static get p_red(): Color {
+		return new Color(255, 128, 128);
+	}
+	/** パステル版 緑色 */
+	public static get p_green(): Color {
+		return new Color(128, 255, 128);
+	}
+	/** パステル版 青色 */
+	public static get p_blue(): Color {
+		return new Color(128, 128, 255);
+	}
+	/** パステル版 桃色 */
+	public static get p_pink(): Color {
+		return new Color(255, 128, 255);
+	}
+	/** パステル版 黄色 */
+	public static get p_yellow(): Color {
+		return new Color(255, 255, 128);
+	}
+	/** パステル版 水色 */
+	public static get p_aqua(): Color {
+		return new Color(128, 255, 255);
+	}
+
+	/** ダークカラー版 赤色 */
+	public static get d_red(): Color {
+		return new Color(128, 0, 0);
+	}
+	/** ダークカラー版 緑色 */
+	public static get d_green(): Color {
+		return new Color(0, 128, 0);
+	}
+	/** ダークカラー版 青色 */
+	public static get d_blue(): Color {
+		return new Color(0, 0, 128);
+	}
+	/** ダークカラー版 桃色 */
+	public static get d_pink(): Color {
+		return new Color(128, 0, 128);
+	}
+	/** ダークカラー版 黄色 */
+	public static get d_yellow(): Color {
+		return new Color(128, 128, 0);
+	}
+	/** ダークカラー版 水色 */
+	public static get d_aqua(): Color {
+		return new Color(0, 128, 128);
+	}
+
+	/** 白色 */
+	public static get white(): Color {
+		return new Color(255, 255, 255);
+	}
+	/** パステル版 ねずみ色 */
+	public static get p_gray(): Color {
+		return new Color(191, 191, 191);
+	}
+	/** ねずみ色 */
+	public static get gray(): Color {
+		return new Color(128, 128, 128);
+	}
+	/** ークカラー版 ねずみ色 */
+	public static get d_gray(): Color {
+		return new Color(40, 40, 40);
+	}
+	/** 明るめの黒 */
+	public static get brightblack(): Color {
+		return new Color(20, 20, 20);
+	}
+	/** 黒色 */
+	public static get black(): Color {
+		return new Color(0, 0, 0);
+	}
+
+	/** マゼンタ */
+	public static get magenta(): Color {
+		return new Color(255, 0, 128);
+	}
+	/** 紫色 */
+	public static get purple(): Color {
+		return new Color(128, 0, 255);
+	}
+	/** オレンジ色 */
+	public static get orange(): Color {
+		return new Color(255, 128, 0);
+	}
+	/** ライム色 */
+	public static get lime(): Color {
+		return new Color(128, 255, 0);
+	}
+	/** エメラルドグリーン */
+	public static get emerald(): Color {
+		return new Color(0, 255, 128);
+	}
+	/** アジュールブルー */
+	public static get azure(): Color {
+		return new Color(0, 128, 255);
+	}
 }
 
 /** フォントを保持するクラス */
@@ -1016,8 +1250,8 @@ class Font {
 	 * @param italic イタリック体かどうか
 	 */
 	constructor(font: string | null = null, size: float | null = null, bold: boolean = false, italic: boolean = false) {
-		this.font = font ? font : DEFAULT_FONT_NAME;
-		this.size = size ? size : DEFAULT_FONT_SIZE;
+		this.font = font ?? DEFAULT_FONT_NAME;
+		this.size = size ?? DEFAULT_FONT_SIZE;
 		this.bold = bold;
 		this.italic = italic;
 	}
@@ -1089,6 +1323,14 @@ class Font {
 		this.italic = false;
 		return this;
 	}
+	/**
+	 * フォントが完全に同じかどうかを比較する
+	 * @param other 比較対象のフォント
+	 * @returns 完全に同じフォントの場合は true
+	 */
+	public equals(other: Font): boolean {
+		return (this.font === other.font && this.size === other.size && this.bold === other.bold && this.italic === other.italic);
+	}
 }
 
 /** アニメーションの開始値と終了値、移動速度を保持するクラス */
@@ -1116,7 +1358,7 @@ abstract class Tween<T, U = T> {
 }
 
 /** 数値を保存するための拡張 Tween クラス */
-class TweenNumber extends Tween<number>{
+class TweenNumber extends Tween<number> {
 	/** @inheritdoc */
 	public approach(): void {
 		this.value = approach_num(this.value, this.dest, this.speed);
@@ -1124,7 +1366,7 @@ class TweenNumber extends Tween<number>{
 }
 
 /** 角度を保存するための拡張 Tween クラス */
-class TweenAngle extends Tween<angle_t>{
+class TweenAngle extends Tween<angle_t> {
 	/** @inheritdoc */
 	public approach(): void {
 		this.value = approach_angle(this.value, this.dest, this.speed);
@@ -1132,7 +1374,7 @@ class TweenAngle extends Tween<angle_t>{
 }
 
 /** 座標を保存するための拡張 Tween クラス */
-class TweenVector2 extends Tween<Vector2, float>{
+class TweenVector2 extends Tween<Vector2, float> {
 	/** @inheritdoc */
 	constructor(value: Vector2, speed: float) {
 		super(value, speed);
@@ -1146,7 +1388,7 @@ class TweenVector2 extends Tween<Vector2, float>{
 }
 
 /** 色を保存するための拡張 Tween クラス */
-class TweenColor extends Tween<Color, float>{
+class TweenColor extends Tween<Color, float> {
 	/** @inheritdoc */
 	constructor(value: Color, speed: float) {
 		super(value, speed);
@@ -1159,16 +1401,80 @@ class TweenColor extends Tween<Color, float>{
 	}
 }
 
+/** オブジェクトのアニメーションを計算するクラス */
+abstract class TweenEventBase<T extends copyable_t<T>> {
+	/** アニメーションを適用するオブジェクト */
+	protected readonly value: T;
+	/** アニメーションの開始値 */
+	protected readonly initial: T;
+	/** アニメーションの終了値 */
+	protected readonly dest: T;
+	/** アニメーションの時間 ( 秒 ) */
+	protected readonly duration: float;
+	/** アニメーションの経過時間 ( 秒 ) */
+	protected time: int;
+
+	/**
+	 * コンストラクタ
+	 * @param value アニメーションを適応するオブジェクト
+	 * @param dest アニメーションの終了値
+	 * @param duration アニメーションの時間 ( 秒 )
+	 */
+	constructor(value: T, dest: T, duration: float) {
+		this.value = value;
+		this.initial = value.copy();
+		this.dest = dest.copy();
+		this.duration = duration;
+		this.time = 0;
+	}
+	/**
+	 * アニメーションを更新する
+	 * @returns アニメーションが終了した場合は false
+	 */
+	public update(delta_time: float): boolean {
+		this.time += 1 / delta_time;
+		return this.time < this.duration;
+	}
+}
+
+/** Vector2 のアニメーションを計算するクラス */
+class TweenEventVector2 extends TweenEventBase<Vector2> {
+	/** @inheritdoc */
+	constructor(value: Vector2, dest: Vector2, duration: float) {
+		super(value, dest, duration);
+	}
+	/** @inheritdoc */
+	public update(delta_time: float): boolean {
+		this.value.set(this.initial.add(this.dest.sub(this.initial).mul(get_cubic_bezier_point(this.time / this.duration))));
+		return super.update(delta_time);
+	}
+}
+
+/** Color のアニメーションを計算するクラス */
+class TweenEventColor extends TweenEventBase<Color> {
+	/** @inheritdoc */
+	constructor(value: Color, dest: Color, duration: float) {
+		super(value, dest, duration);
+	}
+	/** @inheritdoc */
+	public update(delta_time: float): boolean {
+		this.value.set(this.initial.add(this.dest.sub(this.initial).mul(get_cubic_bezier_point(this.time / this.duration))));
+		return super.update(delta_time);
+	}
+}
+
 /** マウスやタップに対応したボタン */
-class ClickButton {
+class ClickableButton {
 	/** ボタンの位置 */
-	public rect: Rectangle;
+	public readonly rect: Rectangle;
 	/** ボタン選択時に呼ばれるコールバックイベント */
-	protected readonly enter_callback: ((click_button: ClickButton) => void) | null;
+	protected readonly enter_callback: ((clickable_button: ClickableButton) => void) | null;
 	/** ボタンがロックされているかどうか ( ロック状態 = クリックイベント無効化 ) */
-	protected is_locked: boolean;
+	public is_locked: boolean;
+	/** ステータスごとのカウント ( ステータスが変更されるたびにリセットされる ) */
+	public status_count: int;
 	/** ボタンのステータス */
-	public status: BUTTON_STATUS;
+	private _status: BUTTON_STATUS;
 
 	/**
 	 * ボタンの位置を指定して初期化する
@@ -1176,44 +1482,63 @@ class ClickButton {
 	 * @param enter_callback クリック時のコールバックイベント
 	 * @param is_locked ロック状態フラグ
 	 */
-	constructor(rect: Rectangle, enter_callback: ((click_button: ClickButton) => void) | null = null, is_locked: boolean = false) {
+	constructor(rect: Rectangle, enter_callback: ((clickable_button: ClickableButton) => void) | null = null, is_locked: boolean = false) {
 		this.rect = rect.copy();
 		this.enter_callback = enter_callback;
 		this.is_locked = is_locked;
-		this.status = BUTTON_STATUS.normal;
+		this.status_count = 0;
+		this._status = BUTTON_STATUS.normal;
 	}
 	/** オーバーライドしてボタンの状態に対する処理を実装するためのメソッド */
 	public update(): void {
 		if (this.enter_callback && this.is_enter) this.enter_callback(this);
+		this.status_count++;
 	}
 	/** ボタンのステータスを更新する */
 	public update_status(): void {
 		if (Collision.check(this.rect, new Dot(get_mouse_pos().x, get_mouse_pos().y))) {
 			if (get_mouse_click() == 1) this.status = BUTTON_STATUS.click_start;
+			else if (get_mouse_click() && this.status == BUTTON_STATUS.normal) this.status = BUTTON_STATUS.hover_start;
 			else if (get_mouse_click()) this.status = BUTTON_STATUS.click;
 			else if (get_mouse_release() == 1) this.status = BUTTON_STATUS.enter;
 			else if (this.status == BUTTON_STATUS.normal) this.status = BUTTON_STATUS.hover_start;
 			else this.status = BUTTON_STATUS.hover;
 		}
-		else if (get_mouse_click() && this.status == BUTTON_STATUS.click) {		// ボタンを押しながら範囲から離れたら
+		else if (get_mouse_click() && this.status == BUTTON_STATUS.click) {				// ボタンを押しながら範囲から離れたら
 			this.status = BUTTON_STATUS.click_leave;
 		}
 		else this.status = BUTTON_STATUS.normal;
 
-		if ((get_touche() || get_no_touche() == 1) && Collision.check(this.rect, new Dot(get_touche_pos().x, get_touche_pos().y))) {
-			if (get_touche() == 1) this.status = BUTTON_STATUS.hover_start;			// click_start ではなく、イベントが登録されている確率が高い hover_start にする
-			else if (get_touche()) this.status = BUTTON_STATUS.hover;
-			else if (get_no_touche() == 1) this.status = BUTTON_STATUS.enter;
+		if ((get_touche_num() == 1 || get_no_touche() == 1)) {
+			if (Collision.check(this.rect, new Dot(get_touche_pos().x, get_touche_pos().y))) {
+				if (get_touche() == 1) this.status = BUTTON_STATUS.hover_start;			// click_start ではなく、イベントが登録されている確率が高い hover_start にする
+				else if (get_touche()) this.status = BUTTON_STATUS.hover;
+				else if (get_no_touche() == 1) this.status = BUTTON_STATUS.enter;
+			}
+			else {			// 自分以外の他の場所がクリックされたら選択状態を解除する
+				this.status = BUTTON_STATUS.normal;
+			}
 		}
 	}
 	/** オーバーライド用のボタンを描画するメソッド
 	 * @param ctx 描画先のコンテキスト ( デバッグ用のボタンを描画する場合のみ渡す )
 	 */
 	public draw(ctx?: CanvasRenderingContext2D): void {
-		let color = COLOR.white;
-		if (this.is_hover) color = COLOR.p_yellow;
-		if (this.is_click) color = COLOR.gray;
+		let color = Color.white;
+		if (this.is_hover) color = Color.p_yellow;
+		if (this.is_click) color = Color.gray;
 		if (ctx) ctx.draw_box(this.rect.ul_pos.x, this.rect.ul_pos.y, this.rect.br_pos.x, this.rect.br_pos.y, color);
+	}
+	/** ボタンのステータス */
+	public get status(): BUTTON_STATUS {
+		return this._status;
+	}
+	/** ボタンのステータス */
+	public set status(status: BUTTON_STATUS) {
+		if (this._status != status) {
+			this._status = status;
+			this.status_count = 0;
+		}
 	}
 	/** マウスがホバー状態かどうか */
 	public get is_hover(): boolean {
@@ -1245,8 +1570,8 @@ class ClickButton {
 	}
 }
 
-/** ClickButton クラスの draw メソッドにアニメーションを付けた、そのまま使えるデザインボタン */
-class ClickButtonAnimation extends ClickButton {
+/** ClickableButton クラスの draw メソッドにアニメーションを付けた、そのまま使えるデザインボタン */
+class AnimatedClickableButton extends ClickableButton {
 	/** ボタンの色 */
 	protected readonly color: Color;
 	/** ボタンを塗りつぶす色 */
@@ -1264,7 +1589,7 @@ class ClickButtonAnimation extends ClickButton {
 	 * @param color ボタンの色
 	 * @param start_anim_count アニメーションの初期カウント
 	 */
-	constructor(rect: Rectangle, enter_callback: ((click_button: ClickButton) => void) | null = null, is_locked: boolean = false, color: Color = COLOR.white, start_anim_count: int = 0) {
+	constructor(rect: Rectangle, enter_callback: ((clickable_button: ClickableButton) => void) | null = null, is_locked: boolean = false, color: Color = Color.white, start_anim_count: int = 0) {
 		super(rect, enter_callback, is_locked);
 		this.color = color.copy();
 		this.fill_color_tween = new TweenColor(color.with_a(0.1), 15);
@@ -1280,7 +1605,7 @@ class ClickButtonAnimation extends ClickButton {
 		if (this.is_hover) this.fill_color_tween.dest = this.color.copy();
 		else if (this.is_inactive) this.fill_color_tween.dest = this.color.with_a(0.1);
 		else if (this.is_click) {
-			this.fill_color_tween.dest = this.color.merge(COLOR.black);
+			this.fill_color_tween.dest = this.color.merge(Color.black);
 		}
 		else if (this.status == BUTTON_STATUS.click_start && this.is_locked) this.locked_click_count = 1;
 		this.fill_color_tween.approach();
@@ -1321,111 +1646,125 @@ class ClickButtonAnimation extends ClickButton {
 }
 
 /** セレクトボタンをグループ管理して、キーボード選択にも対応させるクラス */
-class ClickButtonSelectGroup {
+class ClickableButtonGroup<T extends ClickableButton = ClickableButton> {
 	/** 決定ボタンとして使用するキーコードのリスト */
-	private readonly enter_key_code_list: int[];
+	private readonly enter_key_codes: int[];
 	/** 一度ボタンが決定されれば、全てのボタンステータスをロックするかどうか */
 	private readonly one_click_only: boolean;
 	/** ボタンを格納するリスト */
-	private select_button_list: ClickButton[][];
+	private readonly clickable_buttons: T[][];
+	/** 全てのボタンの基準座標 */
+	private readonly reference_pos: Vector2;
 	/** 現在アクティブ ( 選択されている ) ボタンのインデックス */
-	private active_index: Vector2;
+	public readonly active_index: Vector2;
 	/** 現在アクティブなボタンがアクティブになってからのカウンター */
 	private active_count: int;
-	/** 全てのボタンの基準座標 */
-	private reference_pos: Vector2;
 	/** 全てのボタンステータスを更新しない状態かどうか */
 	public is_locked: boolean;
 
 	/**
 	 * コンストラクタ
-	 * @param enter_key_code_list 決定ボタンとして使用するキーコードのリスト
+	 * @param enter_key_codes 決定ボタンとして使用するキーコードのリスト
 	 * @param one_click_only 一度ボタンが決定されれば、全てのボタンステータスをロックするかどうか
 	 */
-	constructor(enter_key_code_list: int[] = [KEY_CODE.ENTER], one_click_only: boolean = false) {
-		this.enter_key_code_list = enter_key_code_list;
+	constructor(enter_key_codes: int[] = [KEY_CODE.ENTER], one_click_only: boolean = false) {
+		this.enter_key_codes = enter_key_codes;
 		this.one_click_only = one_click_only;
-		this.select_button_list = [[]];
-		this.active_index = new Vector2();
+		this.clickable_buttons = [[]];
+		this.reference_pos = Vector2.zero;
+		this.active_index = Vector2.zero;
 		this.active_count = 1;
-		this.reference_pos = new Vector2();
 		this.is_locked = false;
 	}
 	/** ボタングループの状態を更新する */
 	public update(): void {
 		if (this.is_locked == false) {
-			if (get_key_long_press(KEY_CODE.RIGHT)) {
-				if (this.active_index.x < this.select_button_list[this.active_index.y].length - 1) {		// 右に移動
-					this.active_index.x++;
-					this.active_count = 0;
+			const old_active_index = this.active_index.copy();										// 現在ののアクティブインデックスを保存しておく
+			let is_move_end = false;																// 移動完了フラグ
+			while (is_move_end == false) {
+				if (get_key_long_press(KEY_CODE.RIGHT)) {
+					if (this.active_index.x < this.clickable_buttons[this.active_index.y].length - 1) {		// 右に移動
+						this.active_index.x++;
+					}
+					else if (this.active_index.y < this.clickable_buttons.length - 1) {						// 下の段に移動
+						this.active_index.x = 0;
+						this.active_index.y++;
+					}
+					else break;
+					if (this.active_button.is_locked == false) is_move_end = true;							// 移動できたら終了
 				}
-				else if (this.active_index.y < this.select_button_list.length - 1) {						// 下の段に移動
-					this.active_index.x = 0;
-					this.active_index.y++;
-					this.active_count = 0;
+				if (get_key_long_press(KEY_CODE.LEFT)) {													// 左に移動
+					if (this.active_index.x > 0) {
+						this.active_index.x--;
+					}
+					else if (this.active_index.y > 0) {														// 上の段に移動
+						this.active_index.y--;
+						this.active_index.x = this.clickable_buttons[this.active_index.y].length - 1;
+					}
+					else break;
+					if (this.active_button.is_locked == false) is_move_end = true;							// 移動できたら終了
 				}
+				if (get_key_long_press(KEY_CODE.DOWN)) {
+					if (this.active_index.y < this.clickable_buttons.length - 1) {
+						this.active_index.y++;
+						if (this.active_index.x >= this.clickable_buttons[this.active_index.y].length) {	// x の数が異なり、オーバーした場合は調節する
+							this.active_index.x = this.clickable_buttons[this.active_index.y].length - 1;
+						}
+					}
+					else break;
+					if (this.active_button.is_locked == false) is_move_end = true;							// 移動できたら終了
+				}
+				if (get_key_long_press(KEY_CODE.UP)) {
+					if (this.active_index.y > 0) {
+						this.active_index.y--;
+						if (this.active_index.x >= this.clickable_buttons[this.active_index.y].length) {	// x の数が異なり、オーバーした場合は調節する
+							this.active_index.x = this.clickable_buttons[this.active_index.y].length - 1;
+						}
+					}
+					else break;
+					if (this.active_button.is_locked == false) is_move_end = true;				// 移動できたら終了
+				}
+				if (this.active_index.equal(old_active_index)) break;							// ロック状態に関係なく一回も移動していない = 移動キーが押されていないか端っこにいる場合は終了
 			}
-			if (get_key_long_press(KEY_CODE.LEFT)) {														// 左に移動
-				if (this.active_index.x > 0) {
-					this.active_index.x--;
-					this.active_count = 0;
-				}
-				else if (this.active_index.y > 0) {															// 上の段に移動
-					this.active_index.y--;
-					this.active_index.x = this.select_button_list[this.active_index.y].length - 1;
-					this.active_count = 0;
-				}
-			}
-			if (get_key_long_press(KEY_CODE.DOWN) && this.active_index.y < this.select_button_list.length - 1) {
-				this.active_index.y++;
-				if (this.active_index.x >= this.select_button_list[this.active_index.y].length) {		// x の数が異なり、オーバーした場合は調節する
-					this.active_index.x = this.select_button_list[this.active_index.y].length - 1;
-				}
-				this.active_count = 0;
-			}
-			if (get_key_long_press(KEY_CODE.UP) && this.active_index.y > 0) {
-				this.active_index.y--;
-				if (this.active_index.x >= this.select_button_list[this.active_index.y].length) {		// x の数が異なり、オーバーした場合は調節する
-					this.active_index.x = this.select_button_list[this.active_index.y].length - 1;
-				}
-				this.active_count = 0;
-			}
+			if (is_move_end == false) this.active_index.set(old_active_index);					// 移動できなかったら元に戻す
+			else this.active_count = 0;															// 移動できたらカウントをリセットする
 
-			let button_active: Vector2 | null = null;						// マウス等で直接アクティブになったボタンを探す
-			for (let iy = 0; iy < this.select_button_list.length; iy++) {
-				for (let ix = 0; ix < this.select_button_list[iy].length; ix++) {
-					this.select_button_list[iy][ix].update_status();		// 各ボタンのステータスを最新に更新する
-					if (this.select_button_list[iy][ix].is_active) button_active = new Vector2(ix, iy);
-					if (this.select_button_list[iy][ix].is_enter && this.one_click_only) this.is_locked = true;
+			let button_active: Vector2 | null = null;							// マウス等で直接アクティブになったボタンを探す
+			for (let iy = 0; iy < this.clickable_buttons.length; iy++) {
+				for (let ix = 0; ix < this.clickable_buttons[iy].length; ix++) {
+					this.clickable_buttons[iy][ix].update_status();				// 各ボタンのステータスを最新に更新する
+					if (this.clickable_buttons[iy][ix].is_active) button_active = new Vector2(ix, iy);
+					if (this.clickable_buttons[iy][ix].is_enter && this.one_click_only) this.is_locked = true;
 				}
 			}
 			if (button_active !== null && this.active_index.not_equal(button_active)) this.active_index.set(button_active);		// 直接マウスホバーされればアクティブの位置を切り替える
 		}
-		else {																// ロック状態でも前フレームの決定状態は解除する
-			for (let iy = 0; iy < this.select_button_list.length; iy++) {
-				for (let ix = 0; ix < this.select_button_list[iy].length; ix++) {
-					if (this.select_button_list[iy][ix].status == BUTTON_STATUS.enter) this.select_button_list[iy][ix].status = BUTTON_STATUS.normal;
+		else {																		// ロック状態でも前フレームの決定状態は解除する
+			for (let iy = 0; iy < this.clickable_buttons.length; iy++) {
+				for (let ix = 0; ix < this.clickable_buttons[iy].length; ix++) {
+					if (this.clickable_buttons[iy][ix].status == BUTTON_STATUS.enter) this.clickable_buttons[iy][ix].status = BUTTON_STATUS.normal;
 				}
 			}
 		}
 
-		for (let iy = 0; iy < this.select_button_list.length; iy++) {					// ボタン独自のステータス更新処理を実行した後に、全てのボタンのステータスを上書きする
-			for (let ix = 0; ix < this.select_button_list[iy].length; ix++) {
-				if (ix == this.active_index.x && iy == this.active_index.y) {			// 現在グループで選択されているものであれば
-					if (this.select_button_list[iy][ix].is_inactive) {
+		for (let iy = 0; iy < this.clickable_buttons.length; iy++) {				// ボタン独自のステータス更新処理を実行した後に、全てのボタンのステータスを上書きする
+			for (let ix = 0; ix < this.clickable_buttons[iy].length; ix++) {
+				if (ix == this.active_index.x && iy == this.active_index.y) {		// 現在グループで選択されているものであれば
+					if (this.clickable_buttons[iy][ix].is_inactive) {
 						if (this.active_count == 0) {
-							this.select_button_list[iy][ix].status = BUTTON_STATUS.hover_start;
+							this.clickable_buttons[iy][ix].status = BUTTON_STATUS.hover_start;
 						}
 						else {
-							this.select_button_list[iy][ix].status = BUTTON_STATUS.hover;
+							this.clickable_buttons[iy][ix].status = BUTTON_STATUS.hover;
+							this.clickable_buttons[iy][ix].status_count = this.active_count;
 						}
 					}
-					if (this.is_locked == false && get_keys(...this.enter_key_code_list) == 1) {
-						this.select_button_list[iy][ix].status = BUTTON_STATUS.enter;
+					if (this.is_locked == false && get_keys(...this.enter_key_codes) == 1 && this.clickable_buttons[iy][ix].is_locked == false) {
+						this.clickable_buttons[iy][ix].status = BUTTON_STATUS.enter;
 						if (this.one_click_only) this.is_locked = true;
 					}
 				}
-				this.select_button_list[iy][ix].update();
+				this.clickable_buttons[iy][ix].update();
 			}
 		}
 		this.active_count++;
@@ -1434,7 +1773,7 @@ class ClickButtonSelectGroup {
 	 * @param ctx 描画先のコンテキスト ( 標準のボタンクラスを使用して描画も行う場合は渡す )
 	 */
 	public draw(ctx?: CanvasRenderingContext2D): void {
-		for (const row of this.select_button_list) {
+		for (const row of this.clickable_buttons) {
 			for (const button of row) {
 				button.draw(ctx);
 			}
@@ -1445,36 +1784,78 @@ class ClickButtonSelectGroup {
 	 * @param button 追加するボタンオブジェクト
 	 * @param active 選択された状態にするかどうか
 	 */
-	public push_select_button(button: ClickButton, active: boolean = false): void {
-		this.select_button_list[this.select_button_list.length - 1].push(button);
-		if (active) this.active_index.set(this.select_button_list[this.select_button_list.length - 1].length - 1, this.select_button_list.length - 1);		// アクティブなボタンを変更する
+	public push_button(button: T, active: boolean = false): void {
+		let is_all_locked = true;			// 全てのボタンがロックされているかどうか
+		for (const row of this.clickable_buttons) {
+			for (const button of row) {
+				if (button.is_locked == false) {
+					is_all_locked = false;
+					break;
+				}
+			}
+			if (is_all_locked == false) break;
+		}
+		this.clickable_buttons.last().push(button);
+		// ここまで登録されたボタンが全てロックされている場合は、新しく追加されたボタンをアクティブにする
+		if ((is_all_locked && button.is_locked == false) || active) {
+			this.active_index.set(this.clickable_buttons.last().length - 1, this.clickable_buttons.length - 1);
+		}
 	}
 	/**
 	 * 垂直に新しいボタンを追加する
 	 * @param button 追加するボタンオブジェクト
 	 * @param active 選択された状態にするかどうか
 	 */
-	public push_select_button_vertical(button: ClickButton, active: boolean = false): void {
-		if (this.select_button_list[0].length != 0) this.new_line();
-		this.push_select_button(button, active);
+	public push_button_vertical(button: T, active: boolean = false): void {
+		if (this.clickable_buttons[0].any()) this.new_line();
+		this.push_button(button, active);
+	}
+	/**
+	 * 指定したインデックスにボタンを追加する ( 但し、ボタンの間に空白がある場合は正しく動作しないため、基本的には push_button を使用することを推奨 )
+	 * @param x ボタンの x インデックス
+	 * @param y ボタンの y インデックス
+	 * @param button 追加するボタンオブジェクト
+	 * @param active 選択された状態にするかどうか
+	 */
+	public set_button(x: int, y: int, button: T, active: boolean = false): void {
+		let is_all_locked = true;			// 全てのボタンがロックされているかどうか
+		for (const row of this.clickable_buttons) {
+			for (const button of row) {
+				if (button.is_locked == false) {
+					is_all_locked = false;
+					break;
+				}
+			}
+			if (is_all_locked == false) break;
+		}
+		if (this.clickable_buttons[y] === undefined) this.clickable_buttons[y] = [];
+		this.clickable_buttons[y][x] = button;
+		// ここまで登録されたボタンが全てロックされている場合は、新しく追加されたボタンをアクティブにする
+		if ((is_all_locked && button.is_locked == false) || active) {
+			this.active_index.set(x, y);
+		}
 	}
 	/** ボタンの挿入位置を改行する */
 	public new_line(): void {
-		this.select_button_list.push([]);
+		this.clickable_buttons.push([]);
 	}
 	/** ボタンを格納するリストを取得する */
-	public get_select_button_list(): ClickButton[][] {
-		return this.select_button_list;
+	public get_clickable_buttons(): T[][] {
+		return this.clickable_buttons;
+	}
+	/** 現在選択されているボタンを取得する */
+	public get active_button(): T {
+		return this.clickable_buttons[this.active_index.y][this.active_index.x];
 	}
 	/** 基準座標を設定する */
 	public set pos(pos: Vector2) {
-		for (let iy = 0; iy < this.select_button_list.length; iy++) {
-			for (let ix = 0; ix < this.select_button_list[iy].length; ix++) {
-				this.select_button_list[iy][ix].rect.pos.set(this.select_button_list[iy][ix].rect.pos.sub(this.reference_pos));
-				this.select_button_list[iy][ix].rect.pos.set(this.select_button_list[iy][ix].rect.pos.add(pos));
+		for (let iy = 0; iy < this.clickable_buttons.length; iy++) {
+			for (let ix = 0; ix < this.clickable_buttons[iy].length; ix++) {
+				this.clickable_buttons[iy][ix].rect.pos.set(this.clickable_buttons[iy][ix].rect.pos.sub(this.reference_pos));
+				this.clickable_buttons[iy][ix].rect.pos.set(this.clickable_buttons[iy][ix].rect.pos.add(pos));
 			}
 		}
-		this.reference_pos = pos.copy();
+		this.reference_pos.set(pos);
 	}
 	/** 基準座標を取得する */
 	public get pos(): Vector2 {
@@ -1532,19 +1913,19 @@ class DebugTimer {
 	public draw_time(ctx: CanvasRenderingContext2D, draw_fps: boolean = false, font: Font = new Font(null, 20)): void {
 		const STR_PAD = 5;
 		const str_height = ctx.get_height_str("0", font) + STR_PAD;
-		let process_name_width = 0;			// 一番長い処理名の横幅を求める
+		let process_name_width = 0;					// 一番長い処理名の横幅を求める
 		for (let i = 0; i < this.process_name_list.length; i++) {
 			if (process_name_width < ctx.get_width_str(this.process_name_list[i], font)) {
 				process_name_width = ctx.get_width_str(this.process_name_list[i], font);
 			}
 		}
 		process_name_width += 30;
-		let color = COLOR.white;
+		let color = Color.white;
 		let y = this.pos.y + str_height;
 		let back_y_size = str_height * this.time_list.length + STR_PAD;
 		if (draw_fps) back_y_size += str_height;	// フレームレート表示分も背景を長くする
 
-		ctx.draw_box(this.pos.x, this.pos.y, this.pos.x + process_name_width + 120, this.pos.y + back_y_size, COLOR.black.with_a(0.5));
+		ctx.draw_box(this.pos.x, this.pos.y, this.pos.x + process_name_width + 120, this.pos.y + back_y_size, Color.black.with_a(0.5));
 		if (this.time_list.length >= 3) {			// step が 3 つ以上登録されていれば途中の処理時間を表示する
 			for (let i = 0; i < this.time_list.length - 1; i++) {
 				ctx.draw_text(this.process_name_list[i], this.pos.x + STR_PAD, y, color, 0, null, font);
@@ -1553,9 +1934,9 @@ class DebugTimer {
 			}
 		}
 		if (this.time_list.length >= 2) {			// 合計の処理時間を描画する
-			if (this.time_list[this.time_list.length - 1] - this.time_list[0] > 16.6666) color = COLOR.p_red;
-			ctx.draw_text(this.process_name_list[this.time_list.length - 1], this.pos.x + STR_PAD, y, color, 0, null, font);
-			ctx.draw_text((this.time_list[this.time_list.length - 1] - this.time_list[0]).toFixed(3), this.pos.x + process_name_width, y, color, 0, null, font);
+			if (this.time_list.last() - this.time_list[0] > 16.6666) color = Color.p_red;
+			ctx.draw_text(this.process_name_list.last(), this.pos.x + STR_PAD, y, color, 0, null, font);
+			ctx.draw_text((this.time_list.last() - this.time_list[0]).toFixed(3), this.pos.x + process_name_width, y, color, 0, null, font);
 			y += str_height;
 		}
 		if (draw_fps) {
@@ -1566,7 +1947,7 @@ class DebugTimer {
 	/** フレームレートを取得する ( stop_frame() を呼んで計測完了してから使用する ) */
 	public get frame_rate(): float {
 		if (this.time_list.length >= 2) {
-			return 1000 / (this.time_list[this.time_list.length - 1] - this.time_list[0]);
+			return 1000 / (this.time_list.last() - this.time_list[0]);
 		}
 		else {
 			return 0;
@@ -1827,73 +2208,6 @@ class ButtonStatus {
 }
 
 
-/** 一般的な色のカラーオブジェクト */
-const COLOR = {
-	/** 赤色 */
-	red: new Color(255, 0, 0),
-	/** 緑色 */
-	green: new Color(0, 255, 0),
-	/** 青色 */
-	blue: new Color(0, 0, 255),
-	/** 桃色 */
-	pink: new Color(255, 0, 255),
-	/** 黄色 */
-	yellow: new Color(255, 255, 0),
-	/** 水色 */
-	aqua: new Color(0, 255, 255),
-
-	/** パステル版 赤色 */
-	p_red: new Color(255, 128, 128),
-	/** パステル版 緑色 */
-	p_green: new Color(128, 255, 128),
-	/** パステル版 青色 */
-	p_blue: new Color(128, 128, 255),
-	/** パステル版 桃色 */
-	p_pink: new Color(255, 128, 255),
-	/** パステル版 黄色 */
-	p_yellow: new Color(255, 255, 128),
-	/** パステル版 水色 */
-	p_aqua: new Color(128, 255, 255),
-
-	/** ダークカラー版 赤色 */
-	d_red: new Color(128, 0, 0),
-	/** ダークカラー版 緑色 */
-	d_green: new Color(0, 128, 0),
-	/** ダークカラー版 青色 */
-	d_blue: new Color(0, 0, 128),
-	/** ダークカラー版 桃色 */
-	d_pink: new Color(128, 0, 128),
-	/** ダークカラー版 黄色 */
-	d_yellow: new Color(128, 128, 0),
-	/** ダークカラー版 水色 */
-	d_aqua: new Color(0, 128, 128),
-
-	/** 白色 */
-	white: new Color(255, 255, 255),
-	/** パステル版 ねずみ色 */
-	p_gray: new Color(191, 191, 191),
-	/** ねずみ色 */
-	gray: new Color(128, 128, 128),
-	/** ークカラー版 ねずみ色 */
-	d_gray: new Color(40, 40, 40),
-	/** 明るめの黒 */
-	brightblack: new Color(20, 20, 20),
-	/** 黒色 */
-	black: new Color(0, 0, 0),
-
-	/** マゼンタ */
-	magenta: new Color(255, 0, 128),
-	/** 紫色 */
-	purple: new Color(128, 0, 255),
-	/** オレンジ色 */
-	orange: new Color(255, 128, 0),
-	/** ライム色 */
-	lime: new Color(128, 255, 0),
-	/** エメラルドグリーン */
-	emerald: new Color(0, 255, 128),
-	/** アジュールブルー */
-	azure: new Color(0, 128, 255),
-};
 
 /** ゲームライブラリ内で使用するグローバル変数 */
 namespace game_lib {
@@ -1907,9 +2221,11 @@ namespace game_lib {
 	export let key_count: int = 0;
 	/** 入力を無効化するキー */
 	export let key_disable: { [key: int]: boolean } = {};
+	/** 前回 update が呼ばれた時間 */
+	export let last_update_time: float = 0;
 
 	/** マウスの座標 */
-	export let mouse_pos: Vector2 = new Vector2();
+	export let mouse_pos: Vector2 = Vector2.zero;
 	/** マウスの左ボタンが押されているかどうかの状態 */
 	export let mouse_left: ButtonStatus = new ButtonStatus();
 	/** マウスの右ボタンが押されているかどうかの状態 */
@@ -1920,11 +2236,11 @@ namespace game_lib {
 	export let mouse_wheel_frame: int = 0;
 
 	/** タップ開始位置 */
-	export let touch_s: Vector2 = new Vector2();
+	export let touch_s: Vector2 = Vector2.zero;
 	/** 現在の移動した後の位置 */
-	export let touch_m: Vector2 = new Vector2();
+	export let touch_m: Vector2 = Vector2.zero;
 	/** 移動した距離 */
-	export let touch_l: Vector2 = new Vector2();
+	export let touch_l: Vector2 = Vector2.zero;
 	/** タップしているかどうか */
 	export let touch: boolean = false;
 	/** タップしている長さ */
@@ -1941,7 +2257,11 @@ namespace game_lib {
 	export let touch_distance_old: float = 0;
 	/** 複数タップされている場合は、最初の 2 点座標の距離 */
 	export let touch_distance: float = 0;
+
+	/** tween のコールバック */
+	export let tween_events: TweenEventBase<any>[] = [];
 }
+
 
 
 // ライブラリ系関数
@@ -1959,11 +2279,20 @@ function game_lib_init(canvas: HTMLCanvasElement | null = null): void {
 }
 /** ライブラリをゲームループ毎に更新する */
 function game_lib_update(): void {
+	const delta_time = performance.now() - game_lib.last_update_time;
 	key_input_update();
 	mouse_input_update();
 	touche_input_update();
 	game_lib.mouse_wheel_frame = game_lib.mouse_wheel;
 	game_lib.mouse_wheel = 0;
+
+	for (let i = 0; i < game_lib.tween_events.length; i++) {
+		if (game_lib.tween_events[i].update(delta_time / 1000) == false) {
+			game_lib.tween_events.splice(i, 1);
+			i--;
+		}
+	}
+	game_lib.last_update_time += delta_time;
 }
 
 
@@ -1981,8 +2310,20 @@ function print_error_log(text: string): void {
  * デバッグ用のログを出力する ( リリース時に内部の処理を削除すればログは出力されない )
  * @param text メッセージ
  */
-function print_log(text: any): void {
-	console.log(text);
+function print_log(...data: any[]): void {
+	console.log(...data);
+}
+/**
+ * ブラウザの座標をキャンバスの座標に変換する
+ * @param x ブラウザの x 座標
+ * @param y ブラウザの y 座標
+ * @returns キャンバス上の座標
+ */
+function browser_pos_to_canvas(x: float, y: float): Vector2 {
+	const pos = new Vector2(x, y);
+	if (game_lib.canvas === null) return pos;
+	pos.set(pos.sub(game_lib.canvas.getBoundingClientRect().to_vector2()));
+	return pos.div(new Vector2(game_lib.canvas.clientWidth, game_lib.canvas.clientHeight).div(new Vector2(game_lib.canvas.width, game_lib.canvas.height)));		// 表示サイズとキャンバスの実サイズの比率を修正する
 }
 
 
@@ -1992,20 +2333,20 @@ function print_log(text: any): void {
  * キーボード押下時のコールバック関数
  * @param event イベント
  */
-document.onkeydown = (event): void => {
+document.addEventListener("keydown", (event): void => {
 	if (event && event.keyCode) {
 		if (game_lib.key_input[event.keyCode] == false) game_lib.key_input[event.keyCode] = true;
 	}
-};
+});
 /**
  * キーボードを離したときのコールバック関数
  * @param event イベント
  */
-document.onkeyup = (event): void => {
+document.addEventListener("keyup", (event): void => {
 	if (event && event.keyCode) {
 		game_lib.key_input[event.keyCode] = false;
 	}
-};
+});
 /** キーボード入力を更新する */
 function key_input_update(): void {
 	for (let i = 0; i < KEY_INPUT_MAX; i++) {
@@ -2094,27 +2435,18 @@ function key_input_increment(key_code: key_code_t): void {
 }
 
 /** マウス移動時のコールバックイベント */
-document.addEventListener("mousemove", e => {
-	if (game_lib.canvas === null) {
-		game_lib.mouse_pos.x = e.clientX;
-		game_lib.mouse_pos.y = e.clientY;
-	}
-	else {
-		game_lib.mouse_pos.x = e.clientX - game_lib.canvas.getBoundingClientRect().x;		// キャンバス内の座標を取得する
-		game_lib.mouse_pos.y = e.clientY - game_lib.canvas.getBoundingClientRect().y;
-		game_lib.mouse_pos.x /= game_lib.canvas.clientWidth / game_lib.canvas.width;		// 表示サイズとキャンバスの実サイズの比率を修正する
-		game_lib.mouse_pos.y /= game_lib.canvas.clientHeight / game_lib.canvas.height;
-	}
+document.addEventListener("mousemove", (event): void => {
+	game_lib.mouse_pos.set(browser_pos_to_canvas(event.clientX, event.clientY));
 });
 /** マウスボタン押下時のコールバックイベント */
-document.addEventListener("mousedown", e => {
-	if (e.button == 0) game_lib.mouse_left.is_button_pressed = true;
-	else if (e.button == 2) game_lib.mouse_right.is_button_pressed = true;
+document.addEventListener("mousedown", (event): void => {
+	if (event.button == 0) game_lib.mouse_left.is_button_pressed = true;
+	else if (event.button == 2) game_lib.mouse_right.is_button_pressed = true;
 });
 /** マウスボタン開放時のコールバックイベント */
-document.addEventListener("mouseup", e => {
-	if (e.button == 0) game_lib.mouse_left.is_button_pressed = false;
-	else if (e.button == 2) game_lib.mouse_right.is_button_pressed = false;
+document.addEventListener("mouseup", (event): void => {
+	if (event.button == 0) game_lib.mouse_left.is_button_pressed = false;
+	else if (event.button == 2) game_lib.mouse_right.is_button_pressed = false;
 });
 /** マウス入力を更新する */
 function mouse_input_update(): void {
@@ -2158,9 +2490,9 @@ function get_mouse_right_release(): int {
 }
 
 /** マウスホイールイベント ( onmousewheel は非推奨 ) */
-document.addEventListener("wheel", e => {
-	if (e.deltaY < 0) game_lib.mouse_wheel--;
-	else if (e.deltaY > 0) game_lib.mouse_wheel++;
+document.addEventListener("wheel", (event): void => {
+	if (event.deltaY < 0) game_lib.mouse_wheel--;
+	else if (event.deltaY > 0) game_lib.mouse_wheel++;
 });
 /**
  * マウスホイールのスクロール量を取得する
@@ -2170,55 +2502,50 @@ function get_mouse_wheel(): int {
 	return game_lib.mouse_wheel_frame;
 }
 
-/**
- * タップ開始イベントのコールバック関数
- * @param event イベント
- */
-document.ontouchstart = (event): void => {
+/** タップ開始時のコールバックイベント */
+document.addEventListener("touchstart", (event): void => {
 	game_lib.touch_num = event.touches.length;
-	if (game_lib.touch_num >= 1) {		// タップされ始めれば
-		game_lib.touch_s.set(event.touches[0].pageX, event.touches[0].pageY);
-		game_lib.touch_m.set(event.touches[0].pageX, event.touches[0].pageY);
+	if (game_lib.touch_num >= 1) {			// タップされ始めれば
+		const pos0 = browser_pos_to_canvas(event.touches[0].pageX, event.touches[0].pageY);
+		game_lib.touch_s.set(pos0);
+		game_lib.touch_m.set(pos0);
 		game_lib.touch = true;
+		if (game_lib.touch_num >= 2) {		// 2 つ以上入力があれば
+			const pos1 = browser_pos_to_canvas(event.touches[1].pageX, event.touches[1].pageY);
+			game_lib.touch_distance = Math.sqrt(Math.pow(pos1.x - pos0.x, 2) + Math.pow(pos1.y - pos0.y, 2));
+			game_lib.touch_distance_old = game_lib.touch_distance;
+		}
 	}
-	if (game_lib.touch_num >= 2) {		// 2つ以上入力があれば
-		game_lib.touch_distance = Math.sqrt(Math.pow(event.touches[1].pageX - event.touches[0].pageX, 2) + Math.pow(event.touches[1].pageY - event.touches[0].pageY, 2));
-		game_lib.touch_distance_old = game_lib.touch_distance;
-	}
-};
-/**
- * タップしながら移動した時のコールバック関数
- * @param event イベント
- */
-document.ontouchmove = (event): void => {
+});
+/** タップしながら移動した時のコールバックイベント */
+document.addEventListener("touchmove", (event): void => {
 	game_lib.touch_num = event.touches.length;
 	if (game_lib.touch_num >= 1) {
-		game_lib.touch_m.set(event.touches[0].pageX, event.touches[0].pageY);
+		const pos0 = browser_pos_to_canvas(event.touches[0].pageX, event.touches[0].pageY);
+		game_lib.touch_m.set(pos0);
+		if (game_lib.touch_num >= 2) {
+			const pos1 = browser_pos_to_canvas(event.touches[1].pageX, event.touches[1].pageY);
+			game_lib.touch_distance = Math.sqrt(Math.pow(pos1.x - pos0.x, 2) + Math.pow(pos1.y - pos0.y, 2));
+		}
 	}
-	if (game_lib.touch_num >= 2) {
-		game_lib.touch_distance = Math.sqrt(Math.pow(event.touches[1].pageX - event.touches[0].pageX, 2) + Math.pow(event.touches[1].pageY - event.touches[0].pageY, 2));
-	}
-};
-/**
- * タップ終了イベントのコールバック関数
- * @param event イベント
- */
-document.ontouchend = (event): void => {
+});
+/** タップ終了時のコールバックイベント */
+document.addEventListener("touchend", (event): void => {
 	game_lib.touch_num = event.touches.length;
 	if (game_lib.touch_num >= 1) {						// 1 つ以上入力があれば
-		game_lib.touch_s.set(event.touches[0].pageX, event.touches[0].pageY);		// 入力個数が減っただけなら、残っているほうの座標で初期化する ( テレポート対策 )
-		game_lib.touch_m.set(event.touches[0].pageX, event.touches[0].pageY);
+		const pos = browser_pos_to_canvas(event.touches[0].pageX, event.touches[0].pageY);
+		game_lib.touch_s.set(pos);						// 入力個数が減っただけなら、残っているほうの座標で初期化する ( テレポート対策 )
+		game_lib.touch_m.set(pos);
 	}
 	if (game_lib.touch_num <= 1) {
 		game_lib.touch_distance_old = 0;
 		game_lib.touch_distance = 0;
 	}
 	if (game_lib.touch_num == 0) {						// 完全に入力がなくなれば初期化する
-		game_lib.touch_s.set(0, 0);
-		game_lib.touch_m.set(0, 0);
+		game_lib.touch_s.set(0);
 		game_lib.touch = false;
 	}
-};
+});
 /** タップ入力を更新する */
 function touche_input_update(): void {
 	if (game_lib.touch) {
@@ -2238,11 +2565,13 @@ function touche_input_update(): void {
 		game_lib.no_touch_2_count++;
 	}
 
-	game_lib.touch_l.x = game_lib.touch_m.x - game_lib.touch_s.x;
-	game_lib.touch_l.y = game_lib.touch_m.y - game_lib.touch_s.y;
-	game_lib.touch_s.x = game_lib.touch_m.x;
-	game_lib.touch_s.y = game_lib.touch_m.y;
-
+	if (get_touche()) {
+		game_lib.touch_l.set(game_lib.touch_m.sub(game_lib.touch_s));
+	}
+	else {
+		game_lib.touch_l.set(0);
+	}
+	game_lib.touch_s.set(game_lib.touch_m);
 	game_lib.touch_distance_old = game_lib.touch_distance;
 }
 /**
@@ -2292,7 +2621,7 @@ function get_pinch_out(): float {
 }
 /**
  * タップされた座標を取得する
- * @returns タップされた座標を取得する ( タップされていない場合は x=0, y=0 を返す )
+ * @returns タップされた座標を取得する ( タップされていない場合は最新の座標を返す )
  */
 function get_touche_pos(): Vector2 {
 	return game_lib.touch_m.copy();
@@ -2407,7 +2736,7 @@ function convert_image_bright(img: any, r: int, g: int, b: int): HTMLImageElemen
 		pixels.data[i + 2] += b;
 	}
 
-	let re_img: any = new Image();
+	const re_img: any = new Image();
 	re_img.putImageData(pixels, 0, 0);		// 変更後のピクセルデータで上書きする
 	return re_img;
 }
@@ -2548,13 +2877,172 @@ function millisecond_to_str(ms: int): string {
 
 
 
+// 特殊系
+/**
+ * ローカルストレージのキーの名称を渡すと、そのキーに対する値を返す
+ * @param key ローカルストレージのキー
+ * @param default_val キーが存在しなかった場合のデフォルト値
+ * @returns ローカルストレージの値
+ */
+function get_from_local_storage(key: string, default_val: string | null = null): string | null {
+	const val = localStorage.getItem(key);
+	return (val !== null) ? val : default_val;			// undefined の場合はそのまま返したいため、?? ではなく三項演算子を使用する
+}
+/**
+ * 2 次元配列を生成する
+ * @param m 一次元の要素数
+ * @param n 二次元の要素数
+ * @param val 初期値
+ * @returns 2 次元配列
+ */
+function generate_2d_array(m: int, n: int, val: any = undefined): any[][] {
+	return Array.from(new Array(m), _ => new Array(n).fill(val));
+}
+/**
+ * Date 型を文字列に変換する
+ * @param date 日時
+ * @param include_seconds 結果に秒を含めるかどうか
+ * @returns 文字列に変換された日時
+ */
+function date_to_string(date: Date, include_seconds: boolean = true): string {
+	let result = date.getFullYear() + "/" + zero_pad(date.getMonth() + 1, 2) + "/" + zero_pad(date.getDate(), 2) + " " + zero_pad(date.getHours(), 2) + ":" + zero_pad(date.getMinutes(), 2);
+	if (include_seconds) result += ":" + zero_pad(date.getSeconds(), 2);
+	return result;
+}
+/**
+ * 特定の文字列のプレースホルダを引数で渡された文字で置き換える
+ * @param str 置換前文字列 プレースホルダを `{0}`, `{1}` の形式で埋め込む
+ * @param args 第 2 引数以降で、置換する文字列を指定する
+ * @returns 置き換えられた文字列
+ */
+function str_format(str: string, ...args: unknown[]): string {
+	for (const [i, arg] of args.entries()) {
+		const regExp = new RegExp(`\\{${i}\\}`, "g");
+		str = str.replace(regExp, arg as string);
+	}
+	return str;
+}
+
+
+
 // Array クラスの拡張メソッド
 interface Array<T> {
 	/** 配列の中身を空にする */
 	clear(): void;
+	/**
+	 * 配列のシャローコピーを取得する
+	 * @returns 配列のシャローコピー
+	 */
+	copy(): T[];
+	/**
+	 * 配列の指定された位置に要素を挿入する
+	 * @param index 挿入する位置
+	 * @param item 挿入する要素
+	 */
+	insert(index: int, item: T): void;
+	/**
+	 * 配列の最初の要素を取得する
+	 * @returns 配列の最初の要素
+	 */
+	first(): T;
+	/**
+	 *  配列の最後の要素を取得する
+	 * @returns 配列の最後の要素
+	 */
+	last(): T;
+	/**
+	 * 配列の最初の要素を取得する ( 要素が存在しない場合は、デフォルト値を返す )
+	 * @param default_value 要素が存在しない場合に返す値
+	 * @returns 配列の最初の要素
+	 */
+	first_or_default(default_value: T): T;
+	/**
+	 * 配列の最後の要素を取得する ( 要素が存在しない場合は、デフォルト値を返す )
+	 * @param default_value 要素が存在しない場合に返す値
+	 * @returns 配列の最後の要素
+	 */
+	last_or_default(default_value: T): T;
+	/**
+	 * シーケンスに要素が含まれているかどうかを判断する
+	 * @param predicate 各要素をテストする関数
+	 * @returns シーケンスに要素が含まれている場合は true を返す
+	 */
+	any(predicate?: ((item: T) => boolean) | null): boolean;
+	/**
+	 * シーケンスのすべての要素が条件を満たしているかどうかを判断する
+	 * @param predicate 各要素をテストする関数
+	 * @returns シーケンスのすべての要素が条件を満たしている場合は true を返す
+	 */
+	all(predicate: (item: T) => boolean): boolean;
+	/**
+	 * 配列の最大値を取得する
+	 * @returns 配列の最大値
+	 */
+	max(): T;
+	/**
+	 * 配列の最小値を取得する
+	 * @returns 配列の最小値
+	 */
+	min(): T;
+	/**
+	 * 配列の要素をランダムに一つ取得する
+	 * @returns ランダムに選択された配列の要素
+	 */
+	choose_random(): T;
 }
 Array.prototype.clear = function (): void {
 	this.splice(0);
+};
+Array.prototype.copy = function <T>(): T[] {
+	return this.concat();
+};
+Array.prototype.insert = function <T>(index: int, item: T): void {
+	this.splice(index, 0, item);
+};
+Array.prototype.first = function <T>(): T {
+	return this[0];
+};
+Array.prototype.last = function <T>(): T {
+	return this[this.length - 1];
+};
+Array.prototype.first_or_default = function <T>(default_value: T): T {
+	if (this.any() == false) return default_value;
+	return this.first();
+};
+Array.prototype.last_or_default = function <T>(default_value: T): T {
+	if (this.any() == false) return default_value;
+	return this.last();
+};
+Array.prototype.any = function <T>(predicate: ((item: T) => boolean) | null = null): boolean {
+	if (predicate === null) return this.length > 0;
+	return this.some(predicate);
+};
+Array.prototype.all = function <T>(predicate: (item: T) => boolean): boolean {
+	return this.every(predicate);
+};
+Array.prototype.max = function <T>(): T {
+	return <T>Math.max.apply(null, this);
+};
+Array.prototype.min = function <T>(): T {
+	return <T>Math.min.apply(null, this);
+};
+Array.prototype.choose_random = function <T>(): T {
+	return this[get_rand_int(this.length)];		// 要素がなかった場合は undefined を返す
+};
+
+
+
+// Number クラスの拡張メソッド
+interface NumberConstructor {
+	/**
+	 * 渡された文字列が数値かどうかを判断する ( 少数でも true を返す )
+	 * @param n 判断する値
+	 * @returns 渡された値が数値であれば true を返す
+	 */
+	is_number(n: string): boolean;
+}
+Number.is_number = (n: string): boolean => {
+	return Number.isNaN(parseFloat(n)) == false;
 };
 
 
@@ -2782,7 +3270,7 @@ interface CanvasRenderingContext2D {
 	 * @param outline_thickness アウトラインの太さ
 	 * @param outline_color アウトラインの色
 	 * @param font フォント
-	 * @example ctx.draw_text_color_tag("white<#ff0000>red</>white<#00ff00>green</><#0000ff>blue</>", 100, 100, COLOR.white);
+	 * @example ctx.draw_text_color_tag("white<#ff0000>red</>white<#00ff00>green</><#0000ff>blue</>", 100, 100, Color.white);
 	 */
 	draw_text_color_tag(str: string, x: float, y: float, default_color: Color | string, outline_thickness?: float | null, outline_color?: Color | string | null, font?: Font | string | null): void;
 	/**
@@ -2794,7 +3282,7 @@ interface CanvasRenderingContext2D {
 	 * @param outline_thickness アウトラインの太さ
 	 * @param outline_color アウトラインの色
 	 * @param font フォント
-	 * @example ctx.draw_text_right_color_tag("white<#ff0000>red</>white<#00ff00>green</><#0000ff>blue</>", 100, 100, COLOR.white);
+	 * @example ctx.draw_text_right_color_tag("white<#ff0000>red</>white<#00ff00>green</><#0000ff>blue</>", 100, 100, Color.white);
 	 */
 	draw_text_right_color_tag(str: string, x: float, y: float, color: Color | string, outline_thickness?: float | null, outline_color?: Color | string | null, font?: Font | string | null): void;
 	/**
@@ -2806,7 +3294,7 @@ interface CanvasRenderingContext2D {
 	 * @param outline_thickness アウトラインの太さ
 	 * @param outline_color アウトラインの色
 	 * @param font フォント
-	 * @example ctx.draw_text_center_color_tag("white<#ff0000>red</>white<#00ff00>green</><#0000ff>blue</>", 100, 100, COLOR.white);
+	 * @example ctx.draw_text_center_color_tag("white<#ff0000>red</>white<#00ff00>green</><#0000ff>blue</>", 100, 100, Color.white);
 	 */
 	draw_text_center_color_tag(str: string, x: float, y: float, color: Color | string, outline_thickness?: float | null, outline_color?: Color | string | null, font?: Font | string | null): void;
 	/**
@@ -2818,7 +3306,7 @@ interface CanvasRenderingContext2D {
 	 * @param outline_thickness アウトラインの太さ
 	 * @param outline_color アウトラインの色
 	 * @param font フォント
-	 * @example ctx.draw_text_center_y_color_tag("white<#ff0000>red</>white<#00ff00>green</><#0000ff>blue</>", 100, 100, COLOR.white);
+	 * @example ctx.draw_text_center_y_color_tag("white<#ff0000>red</>white<#00ff00>green</><#0000ff>blue</>", 100, 100, Color.white);
 	 */
 	draw_text_center_y_color_tag(str: string, x: float, y: float, color: Color | string, outline_thickness?: float | null, outline_color?: Color | string | null, font?: Font | string | null): void;
 	/**
@@ -2831,7 +3319,7 @@ interface CanvasRenderingContext2D {
 	 * @param outline_color アウトラインの色
 	 * @param font フォント
 	 * @param pad_y 改行時の y 座標の間隔
-	 * @example ctx.draw_text_new_line_color_tag("white<#ff0000>red</>white<#00ff00>green</><#0000ff>blue</>", 100, 100, COLOR.white);
+	 * @example ctx.draw_text_new_line_color_tag("white<#ff0000>red</>white<#00ff00>green</><#0000ff>blue</>", 100, 100, Color.white);
 	 */
 	draw_text_new_line_color_tag(str: string, x: float, y: float, color: Color | string, outline_thickness?: float | null, outline_color?: Color | string | null, font?: Font | string | null, pad_y?: float): void;
 	/**
@@ -2844,7 +3332,7 @@ interface CanvasRenderingContext2D {
 	 * @param outline_color アウトラインの色
 	 * @param font フォント
 	 * @param pad_y 改行時の y 座標の間隔
-	 * @example ctx.draw_text_center_new_line_color_tag("white<#ff0000>red</>white<#00ff00>green</><#0000ff>blue</>", 100, 100, COLOR.white);
+	 * @example ctx.draw_text_center_new_line_color_tag("white<#ff0000>red</>white<#00ff00>green</><#0000ff>blue</>", 100, 100, Color.white);
 	 */
 	draw_text_center_new_line_color_tag(str: string, x: float, y: float, color: Color | string, outline_thickness?: float | null, outline_color?: Color | string | null, font?: Font | string | null, pad_y?: float): void;
 	/**
@@ -3018,9 +3506,9 @@ CanvasRenderingContext2D.prototype.color_to_str = function (color_object, set_gl
 			return color_object;
 	}
 };
-CanvasRenderingContext2D.prototype.draw_text = function (str, x, y, color, outline_thickness = 0, outline_color = COLOR.white, font = null): void {
+CanvasRenderingContext2D.prototype.draw_text = function (str, x, y, color, outline_thickness = 0, outline_color = Color.white, font = null): void {
 	this.save();
-	outline_color ??= COLOR.white;
+	outline_color ??= Color.white;
 	if (font !== null) this.font = this.font_to_str(font);
 	if (outline_thickness) {
 		this.lineWidth = outline_thickness * 2;
@@ -3031,16 +3519,16 @@ CanvasRenderingContext2D.prototype.draw_text = function (str, x, y, color, outli
 	this.fillText(str, x, y);
 	this.restore();
 };
-CanvasRenderingContext2D.prototype.draw_text_right = function (str, x, y, color, outline_thickness = 0, outline_color = COLOR.white, font = null): void {
+CanvasRenderingContext2D.prototype.draw_text_right = function (str, x, y, color, outline_thickness = 0, outline_color = Color.white, font = null): void {
 	this.draw_text(str, x - this.get_width_str(str, font), y, color, outline_thickness, outline_color, font);
 };
-CanvasRenderingContext2D.prototype.draw_text_center = function (str, x, y, color, outline_thickness = 0, outline_color = COLOR.white, font = null): void {
+CanvasRenderingContext2D.prototype.draw_text_center = function (str, x, y, color, outline_thickness = 0, outline_color = Color.white, font = null): void {
 	this.draw_text(str, x - (this.get_width_str(str, font) / 2), y, color, outline_thickness, outline_color, font);
 };
-CanvasRenderingContext2D.prototype.draw_text_center_y = function (str, x, y, color, outline_thickness = 0, outline_color = COLOR.white, font = null): void {
+CanvasRenderingContext2D.prototype.draw_text_center_y = function (str, x, y, color, outline_thickness = 0, outline_color = Color.white, font = null): void {
 	this.draw_text(str, x - (this.get_width_str(str, font) / 2), y + (this.get_height_str(str, font) / 2), color, outline_thickness, outline_color, font);
 };
-CanvasRenderingContext2D.prototype.draw_text_new_line = function (str, x, y, color, outline_thickness = 0, outline_color = COLOR.white, font = null, pad_y = 5): void {
+CanvasRenderingContext2D.prototype.draw_text_new_line = function (str, x, y, color, outline_thickness = 0, outline_color = Color.white, font = null, pad_y = 5): void {
 	const text_list = str.split("\n");
 	y += + this.get_height_str(text_list[0], font) + 1;
 	for (const row of text_list) {
@@ -3048,7 +3536,7 @@ CanvasRenderingContext2D.prototype.draw_text_new_line = function (str, x, y, col
 		y += this.get_height_str(row, font) + pad_y;
 	}
 };
-CanvasRenderingContext2D.prototype.draw_text_center_new_line = function (str, x, y, color, outline_thickness = 0, outline_color = COLOR.white, font = null, pad_y = 5): void {
+CanvasRenderingContext2D.prototype.draw_text_center_new_line = function (str, x, y, color, outline_thickness = 0, outline_color = Color.white, font = null, pad_y = 5): void {
 	const text_list = str.split("\n");
 	y += + this.get_height_str(text_list[0], font) + 1;
 	for (const row of text_list) {
@@ -3056,7 +3544,7 @@ CanvasRenderingContext2D.prototype.draw_text_center_new_line = function (str, x,
 		y += this.get_height_str(row, font) + pad_y;
 	}
 };
-CanvasRenderingContext2D.prototype.draw_text_color_tag = function (str, x, y, default_color, outline_thickness = 0, outline_color = COLOR.white, font = null): void {
+CanvasRenderingContext2D.prototype.draw_text_color_tag = function (str, x, y, default_color, outline_thickness = 0, outline_color = Color.white, font = null): void {
 	const PAD = 2;
 	let current_x = 0;				// 現在描画したところまでの x 座標
 	let current_position = 0;		// 現在描画したところまでの文字数
@@ -3072,19 +3560,19 @@ CanvasRenderingContext2D.prototype.draw_text_color_tag = function (str, x, y, de
 
 	this.draw_text(str.substring(current_position), x + current_x, y, default_color, outline_thickness, outline_color, font);
 };
-CanvasRenderingContext2D.prototype.draw_text_right_color_tag = function (str, x, y, color, outline_thickness = 0, outline_color = COLOR.white, font = null): void {
+CanvasRenderingContext2D.prototype.draw_text_right_color_tag = function (str, x, y, color, outline_thickness = 0, outline_color = Color.white, font = null): void {
 	const str_no_tag = str.replace(TAG_PATTERN, "$2");
 	this.draw_text_color_tag(str, x - this.get_width_str(str_no_tag, font), y, color, outline_thickness, outline_color, font);
 };
-CanvasRenderingContext2D.prototype.draw_text_center_color_tag = function (str, x, y, color, outline_thickness = 0, outline_color = COLOR.white, font = null): void {
+CanvasRenderingContext2D.prototype.draw_text_center_color_tag = function (str, x, y, color, outline_thickness = 0, outline_color = Color.white, font = null): void {
 	const str_no_tag = str.replace(TAG_PATTERN, "$2");
 	this.draw_text_color_tag(str, x - (this.get_width_str(str_no_tag, font) / 2), y, color, outline_thickness, outline_color, font);
 };
-CanvasRenderingContext2D.prototype.draw_text_center_y_color_tag = function (str, x, y, color, outline_thickness = 0, outline_color = COLOR.white, font = null): void {
+CanvasRenderingContext2D.prototype.draw_text_center_y_color_tag = function (str, x, y, color, outline_thickness = 0, outline_color = Color.white, font = null): void {
 	const str_no_tag = str.replace(TAG_PATTERN, "$2");
 	this.draw_text_color_tag(str, x - (this.get_width_str(str_no_tag, font) / 2), y + (this.get_height_str(str, font) / 2), color, outline_thickness, outline_color, font);
 };
-CanvasRenderingContext2D.prototype.draw_text_new_line_color_tag = function (str, x, y, color, outline_thickness = 0, outline_color = COLOR.white, font = null, pad_y = 5): void {
+CanvasRenderingContext2D.prototype.draw_text_new_line_color_tag = function (str, x, y, color, outline_thickness = 0, outline_color = Color.white, font = null, pad_y = 5): void {
 	const text_list = str.split("\n");
 	const text_no_tag_list = str.replace(TAG_PATTERN, "$2").split("\n");
 	if (text_list.length !== text_no_tag_list.length) print_error_log("正常にカラータグと改行を処理できませんでした");
@@ -3095,7 +3583,7 @@ CanvasRenderingContext2D.prototype.draw_text_new_line_color_tag = function (str,
 		y += this.get_height_str(text_no_tag_list[i], font) + pad_y;
 	}
 };
-CanvasRenderingContext2D.prototype.draw_text_center_new_line_color_tag = function (str, x, y, color, outline_thickness = 0, outline_color = COLOR.white, font = null, pad_y = 5): void {
+CanvasRenderingContext2D.prototype.draw_text_center_new_line_color_tag = function (str, x, y, color, outline_thickness = 0, outline_color = Color.white, font = null, pad_y = 5): void {
 	const text_list = str.split("\n");
 	const text_no_tag_list = str.replace(TAG_PATTERN, "$2").split("\n");
 	if (text_list.length !== text_no_tag_list.length) print_error_log("正常にカラータグと改行を処理できませんでした");
@@ -3222,48 +3710,199 @@ CanvasRenderingContext2D.prototype.draw_seamless_image = function (img, screen_w
 
 
 
-// 特殊系
-/**
- * ローカルストレージのキーの名称を渡すと、そのキーに対する値を返す
- * @param key ローカルストレージのキー
- * @param default_val キーが存在しなかった場合のデフォルト値
- * @returns ローカルストレージの値
- */
-function get_from_local_storage(key: string, default_val: string | null = null): string | null {
-	const val = localStorage.getItem(key);
-	return (val !== null) ? val : default_val;			// undefined の場合はそのまま返したいため、?? ではなく三項演算子を使用する
+// DOMRectReadOnly クラスの拡張メソッド
+interface DOMRectReadOnly {
+	/**
+	 * DOMRectReadOnly オブジェクトの座標を Vector2 に変換する
+	 * @returns 座標を表す Vector2
+	 */
+	to_vector2(): Vector2;
 }
-/**
- * 2 次元配列を生成する
- * @param m 一次元の要素数
- * @param n 二次元の要素数
- * @param val 初期値
- * @returns 2 次元配列
- */
-function generate_2d_array(m: int, n: int, val: any = undefined): any[][] {
-	return Array.from(new Array(m), _ => new Array(n).fill(val));
+DOMRectReadOnly.prototype.to_vector2 = function (): Vector2 {
+	return new Vector2(this.x, this.y);
+};
+
+
+
+// 上級者向けのメソッドチェーンクラス
+/** テキストデータのテンプレート */
+interface text_data_template_t {
+	/** 文字色 */
+	color: Color;
+	/** フォント */
+	font: Font;
+	/** アウトラインの太さ */
+	outline_thickness: float;
+	/** アウトラインの色 */
+	outline_color: Color;
 }
-/**
- * Date 型を文字列に変換する
- * @param date 日時
- * @param include_seconds 結果に秒を含めるかどうか
- * @returns 文字列に変換された日時
- */
-function date_to_string(date: Date, include_seconds: boolean = true): string {
-	let result = date.getFullYear() + "/" + zero_pad(date.getMonth() + 1, 2) + "/" + zero_pad(date.getDate(), 2) + " " + zero_pad(date.getHours(), 2) + ":" + zero_pad(date.getMinutes(), 2);
-	if (include_seconds) result += ":" + zero_pad(date.getSeconds(), 2);
-	return result;
-}
-/**
- * 特定の文字列のプレースホルダを引数で渡された文字で置き換える
- * @param str 置換前文字列 プレースホルダを `{0}`, `{1}` の形式で埋め込む
- * @param args 第 2 引数以降で、置換する文字列を指定する
- * @returns 置き換えられた文字列
- */
-function str_format(str: string, ...args: unknown[]): string {
-	for (const [i, arg] of args.entries()) {
-		const regExp = new RegExp(`\\{${i}\\}`, "g");
-		str = str.replace(regExp, arg as string);
+
+/** 文字列を描画する時の情報を保持するクラス */
+class TextData {
+	/** 描画する文字列 */
+	public readonly text: string;
+	/** 値が設定されていないときに使用するテンプレート */
+	private input_template: text_data_template_t;
+
+	/**
+	 * 内部で使用するコンストラクタ
+	 * @param text 描画する文字列
+	 */
+	private constructor(text: string) {
+		this.text = text;
+		this.input_template = {
+			color: Color.white,
+			font: new Font(),
+			outline_thickness: 0,
+			outline_color: Color.brightblack,
+		};
 	}
-	return str;
+	/**
+	 * テキストデータを作成する
+	 * @param text 描画する文字列
+	 * @returns テキストデータ
+	 */
+	public static text(text: string): TextData {
+		return new TextData(text);
+	}
+	/**
+	 * 文字色を設定する
+	 * @param color 文字色
+	 * @returns テキストデータ
+	 */
+	public color(color: Color): TextData {
+		const text_data = this.copy();
+		text_data.input_template.color = color.copy();
+		return text_data;
+	}
+	/**
+	 * フォントを設定する
+	 * @param font フォント
+	 * @returns テキストデータ
+	 */
+	public font(font: Font): TextData {
+		const text_data = this.copy();
+		text_data.input_template.font = font.copy();
+		return text_data;
+	}
+	/**
+	 * アウトラインの太さを設定する
+	 * @param outline_thickness アウトラインの太さ
+	 * @returns テキストデータ
+	 */
+	public outline_thickness(outline_thickness: float): TextData {
+		const text_data = this.copy();
+		text_data.input_template.outline_thickness = outline_thickness;
+		return text_data;
+	}
+	/**
+	 * アウトラインの色を設定する
+	 * @param outline_color アウトラインの色
+	 * @returns テキストデータ
+	 */
+	public outline_color(outline_color: Color): TextData {
+		const text_data = this.copy();
+		text_data.input_template.outline_color = outline_color.copy();
+		return text_data;
+	}
+	/**
+	 * テンプレートを設定する
+	 * @param template テンプレート
+	 * @returns テキストデータ
+	 */
+	public template(template: text_data_template_t): TextData {
+		const text_data = this.copy();
+		text_data.input_template = template;
+		return text_data.copy();				// テンプレート内のオブジェクトをそのまま渡さないためにコピーする
+	}
+	/**
+	 * 透明度を設定する
+	 * @param opacity 透明度
+	 * @returns テキストデータ
+	 */
+	public opacity(opacity: float): TextData {
+		const text_data = this.copy();
+		text_data.input_template.color.a = opacity;
+		text_data.input_template.outline_color.a = opacity;
+		return text_data;
+	}
+	/**
+	 * テキストデータを複製する
+	 * @returns 複製されたテキストデータ
+	 */
+	public copy(): TextData {
+		const text_data = new TextData(this.text);
+		text_data.input_template.color = this.input_template.color.copy();
+		text_data.input_template.font = this.input_template.font.copy();
+		text_data.input_template.outline_thickness = this.input_template.outline_thickness;
+		text_data.input_template.outline_color = this.input_template.outline_color.copy();
+		return text_data;
+	}
+	/**
+	 * テキストデータを描画する
+	 * @param ctx 描画する CanvasRenderingContext2D
+	 * @param x 描画する左上の x 座標
+	 * @param y 描画する左上の y 座標
+	 */
+	public draw(ctx: CanvasRenderingContext2D, x: float, y: float): void {
+		ctx.draw_text(this.text, x, y, this.input_template.color, this.input_template.outline_thickness, this.input_template.outline_color, this.input_template.font);
+	}
+	/**
+	 * テキストデータを中央揃えで描画する
+	 * @param ctx 描画する CanvasRenderingContext2D
+	 * @param x 描画する中央の x 座標
+	 * @param y 描画する中央の y 座標
+	 */
+	public draw_center(ctx: CanvasRenderingContext2D, x: float, y: float): void {
+		ctx.draw_text_center(this.text, x, y, this.input_template.color, this.input_template.outline_thickness, this.input_template.outline_color, this.input_template.font);
+	}
+	/**
+	 * テキストデータを右揃えで描画する
+	 * @param ctx 描画する CanvasRenderingContext2D
+	 * @param x 描画する右上の x 座標
+	 * @param y 描画する右上の y 座標
+	 */
+	public draw_right(ctx: CanvasRenderingContext2D, x: float, y: float): void {
+		ctx.draw_text_right(this.text, x, y, this.input_template.color, this.input_template.outline_thickness, this.input_template.outline_color, this.input_template.font);
+	}
+	/**
+	 * 文字色を取得する
+	 * @returns 文字色
+	 */
+	public get_color(): Color {
+		return this.input_template.color.copy();		// 渡した後で自クラス側で変更しても影響が出ないようにコピーする
+	}
+	/**
+	 * フォントを取得する
+	 * @returns フォント
+	 */
+	public get_font(): Font {
+		return this.input_template.font.copy();			// 渡した後で自クラス側で変更しても影響が出ないようにコピーする
+	}
+	/**
+	 * アウトラインの太さを取得する
+	 * @returns アウトラインの太さ
+	 */
+	public get_outline_thickness(): float {
+		return this.input_template.outline_thickness;
+	}
+	/**
+	 * アウトラインの色を取得する
+	 * @returns アウトラインの色
+	 */
+	public get_outline_color(): Color {
+		return this.input_template.outline_color.copy();		// 渡した後で自クラス側で変更しても影響が出ないようにコピーする
+	}
+	/**
+	 * テキストデータが完全に同じかどうかを比較する
+	 * @param text_data 比較対象のテキストデータ
+	 * @returns 完全に同じテキストデータの場合は true
+	 */
+	public equals(text_data: TextData): boolean {
+		return this.text === text_data.text &&
+			this.input_template.color.equals(text_data.input_template.color) &&
+			this.input_template.font.equals(text_data.input_template.font) &&
+			this.input_template.outline_thickness == text_data.input_template.outline_thickness &&
+			this.input_template.outline_color.equals(text_data.input_template.outline_color);
+	}
 }
